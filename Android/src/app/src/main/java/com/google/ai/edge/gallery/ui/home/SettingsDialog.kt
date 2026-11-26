@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -217,16 +218,21 @@ fun SettingsDialog(
   var showTos by remember { mutableStateOf(false) }
   var showLicenses by remember { mutableStateOf(false) }
 
-  Dialog(onDismissRequest = onDismissed) {
+  Dialog(
+    onDismissRequest = onDismissed,
+    properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+  ) {
     val focusManager = LocalFocusManager.current
     Card(
       modifier =
-        Modifier.fillMaxWidth().clickable(
-          interactionSource = interactionSource,
-          indication = null,
-        ) {
-          focusManager.clearFocus()
-        },
+        Modifier.fillMaxWidth(0.92f)
+          .fillMaxHeight(0.9f)
+          .clickable(
+            interactionSource = interactionSource,
+            indication = null,
+          ) {
+            focusManager.clearFocus()
+          },
       shape = RoundedCornerShape(16.dp),
     ) {
       Column(

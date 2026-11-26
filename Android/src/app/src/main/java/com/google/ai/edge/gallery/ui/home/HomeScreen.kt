@@ -345,8 +345,25 @@ fun HomeScreen(
         },
         gesturesEnabled = drawerState.isOpen,
       ) {
+        val homeBgBrush =
+          Brush.verticalGradient(
+            colors =
+              listOf(
+                androidx.compose.ui.graphics.lerp(
+                  MaterialTheme.colorScheme.surface,
+                  MaterialTheme.colorScheme.primary,
+                  0.14f,
+                ),
+                androidx.compose.ui.graphics.lerp(
+                  MaterialTheme.colorScheme.surface,
+                  MaterialTheme.colorScheme.primary,
+                  0.05f,
+                ),
+                MaterialTheme.colorScheme.background,
+              )
+          )
         Scaffold(
-          containerColor = MaterialTheme.colorScheme.background,
+          containerColor = Color.Transparent,
           topBar = {
             // Top bar animation:
             //
@@ -382,16 +399,14 @@ fun HomeScreen(
           // Outer box for coloring the background edge to edge.
           Box(
             contentAlignment = Alignment.TopCenter,
-            modifier =
-              Modifier.fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+            modifier = Modifier.fillMaxSize().background(homeBgBrush),
           ) {
             // Inner box to hold content.
             Box(
               contentAlignment = Alignment.TopCenter,
               modifier =
                 Modifier.fillMaxSize()
-                  .background(MaterialTheme.colorScheme.background)
+                  .background(homeBgBrush)
                   .padding(top = innerPadding.calculateTopPadding())
                   .verticalScroll(rememberScrollState()),
             ) {
@@ -449,6 +464,7 @@ fun HomeScreen(
                 }
 
                 // Quick-action buttons row.
+                val quickActionsFont = com.google.ai.edge.gallery.ui.theme.ThemeSettings.quickActionsFont.value
                 Row(
                   modifier = Modifier
                     .fillMaxWidth()
@@ -467,7 +483,11 @@ fun HomeScreen(
                       modifier = Modifier.size(16.dp),
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("New Chat", maxLines = 1)
+                    Text(
+                      "New Chat",
+                      maxLines = 1,
+                      fontFamily = quickActionsFont?.fontFamily,
+                    )
                   }
                   FilledTonalButton(
                     onClick = navigateToChatHistory,
@@ -479,7 +499,11 @@ fun HomeScreen(
                       modifier = Modifier.size(16.dp),
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("History", maxLines = 1)
+                    Text(
+                      "History",
+                      maxLines = 1,
+                      fontFamily = quickActionsFont?.fontFamily,
+                    )
                   }
                   FilledTonalButton(
                     onClick = onImportModelClicked,
@@ -492,14 +516,11 @@ fun HomeScreen(
                       modifier = Modifier.size(16.dp),
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Column {
-                      Text("Import", maxLines = 1)
-                      Text(
-                        "GGUF · LiteRT",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                      )
-                    }
+                    Text(
+                      "Import",
+                      maxLines = 1,
+                      fontFamily = quickActionsFont?.fontFamily,
+                    )
                   }
                 }
 
@@ -745,7 +766,7 @@ private fun CategoryTabHeader(
             .clip(CircleShape)
             .background(
               color =
-                if (selectedIndex == index) MaterialTheme.customColors.tabHeaderBgColor
+                if (selectedIndex == index) MaterialTheme.colorScheme.primary
                 else Color.Transparent
             )
             .clickable {
@@ -770,12 +791,15 @@ private fun CategoryTabHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
       ) {
+        val tabsFont = com.google.ai.edge.gallery.ui.theme.ThemeSettings.categoryTabsFont.value
         Text(
           getCategoryLabel(context = context, category = category),
           modifier = Modifier.padding(horizontal = 16.dp),
           style = MaterialTheme.typography.labelLarge,
+          fontFamily = tabsFont?.fontFamily,
           color =
-            if (selectedIndex == index) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+            if (selectedIndex == index) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurfaceVariant,
         )
       }
     }
