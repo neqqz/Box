@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Locales supported by Box (Settings -> Language).
+  Keep in sync with the values-* translation folders.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="fr" />
+    <locale android:name="pt" />
+    <locale android:name="pt-BR" />
+    <locale android:name="de" />
+    <locale android:name="zh-CN" />
+</locale-config>

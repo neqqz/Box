@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="delete_selected_skills_content">
+        <item quantity="other">确定要删除这 %d 项技能吗?</item>
+    </plurals>
+    <plurals name="mcp_servers_count">
+        <item quantity="other">%d 个 MCP 服务器</item>
+    </plurals>
+    <plurals name="mcp_tools_count">
+        <item quantity="other">%d 个工具</item>
+    </plurals>
+    <plurals name="model_list_number_of_models_available">
+        <item quantity="other">%d 个可用模型</item>
+    </plurals>
+    <plurals name="parameter">
+        <item quantity="other">参数</item>
+    </plurals>
+    <plurals name="runs">
+        <item quantity="other">%d 次运行</item>
+    </plurals>
+    <plurals name="selected_custom_skills_count">
+        <item quantity="other">已选择 %d 项</item>
+    </plurals>
+    <plurals name="skills_count">
+        <item quantity="other">%d 项技能</item>
+    </plurals>
+</resources>

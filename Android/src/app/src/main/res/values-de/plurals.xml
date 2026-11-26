@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="delete_selected_skills_content">
+        <item quantity="one">Möchten Sie %d Skill wirklich löschen?</item>
+        <item quantity="other">Möchten Sie %d Skills wirklich löschen?</item>
+    </plurals>
+    <plurals name="mcp_servers_count">
+        <item quantity="one">%d MCP-Server</item>
+        <item quantity="other">%d MCP-Server</item>
+    </plurals>
+    <plurals name="mcp_tools_count">
+        <item quantity="one">%d Tool</item>
+        <item quantity="other">%d Tools</item>
+    </plurals>
+    <plurals name="model_list_number_of_models_available">
+        <item quantity="one">%d Modell verfügbar</item>
+        <item quantity="other">%d Modelle verfügbar</item>
+    </plurals>
+    <plurals name="parameter">
+        <item quantity="one">Parameter</item>
+        <item quantity="other">Parameter</item>
+    </plurals>
+    <plurals name="runs">
+        <item quantity="one">%d Durchlauf</item>
+        <item quantity="other">%d Durchläufe</item>
+    </plurals>
+    <plurals name="selected_custom_skills_count">
+        <item quantity="one">%d ausgewählt</item>
+        <item quantity="other">%d ausgewählt</item>
+    </plurals>
+    <plurals name="skills_count">
+        <item quantity="one">%d Skill</item>
+        <item quantity="other">%d Skills</item>
+    </plurals>
+</resources>
