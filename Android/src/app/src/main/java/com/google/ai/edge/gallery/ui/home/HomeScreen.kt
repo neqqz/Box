@@ -346,7 +346,7 @@ fun HomeScreen(
         gesturesEnabled = drawerState.isOpen,
       ) {
         Scaffold(
-          containerColor = Color.Black, // Black background
+          containerColor = MaterialTheme.colorScheme.background,
           topBar = {
             // Top bar animation:
             //
@@ -384,32 +384,14 @@ fun HomeScreen(
             contentAlignment = Alignment.TopCenter,
             modifier =
               Modifier.fillMaxSize()
-                .background(
-                  Brush.radialGradient(
-                    colors = listOf(
-                      Color(0xFF1A1A1A), // Dark grey center
-                      Color(0xFF141414), // Medium dark grey mid
-                      Color.Black // Black edges
-                    ),
-                    radius = 2000f
-                  )
-                ),
+                .background(MaterialTheme.colorScheme.background),
           ) {
             // Inner box to hold content.
             Box(
               contentAlignment = Alignment.TopCenter,
               modifier =
                 Modifier.fillMaxSize()
-                  .background(
-                    Brush.radialGradient(
-                      colors = listOf(
-                        Color(0xFF1A1A1A), // Dark grey center
-                        Color(0xFF141414), // Medium dark grey mid
-                        Color.Black // Black edges
-                      ),
-                      radius = 2000f
-                    )
-                  )
+                  .background(MaterialTheme.colorScheme.background)
                   .padding(top = innerPadding.calculateTopPadding())
                   .verticalScroll(rememberScrollState()),
             ) {

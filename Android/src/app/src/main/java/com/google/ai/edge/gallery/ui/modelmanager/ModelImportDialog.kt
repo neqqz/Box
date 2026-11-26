@@ -135,6 +135,7 @@ private val IMPORT_CONFIGS_LLM: List<Config> =
     BooleanSwitchConfig(key = ConfigKeys.SUPPORT_AUDIO, defaultValue = false),
     BooleanSwitchConfig(key = ConfigKeys.SUPPORT_MOBILE_ACTIONS, defaultValue = false),
     BooleanSwitchConfig(key = ConfigKeys.SUPPORT_THINKING, defaultValue = false),
+    BooleanSwitchConfig(key = ConfigKeys.SUPPORT_SPECULATIVE_DECODING, defaultValue = false),
     SegmentedButtonConfig(
       key = ConfigKeys.COMPATIBLE_ACCELERATORS,
       defaultValue = SUPPORTED_ACCELERATORS[0].label,
@@ -271,6 +272,12 @@ fun ModelImportDialog(
                   valueType = ValueType.BOOLEAN,
                 )
                   as Boolean
+              val supportSpeculativeDecoding =
+                convertValueToTargetType(
+                  value = values.get(ConfigKeys.SUPPORT_SPECULATIVE_DECODING.label)!!,
+                  valueType = ValueType.BOOLEAN,
+                )
+                  as Boolean
               val importedModel: ImportedModel =
                 ImportedModel.newBuilder()
                   .setFileName(fileName)
@@ -286,6 +293,7 @@ fun ModelImportDialog(
                       .setSupportAudio(supportAudio)
                       .setSupportMobileActions(supportMobileActions)
                       .setSupportThinking(supportThinking)
+                      .setSupportSpeculativeDecoding(supportSpeculativeDecoding)
                       .build()
                   )
                   .build()

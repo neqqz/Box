@@ -1281,6 +1281,7 @@ constructor(
     val llmSupportTinyGarden = info.llmConfig.supportTinyGarden
     val llmSupportMobileActions = info.llmConfig.supportMobileActions
     val llmSupportThinking = info.llmConfig.supportThinking
+    val llmSupportSpeculativeDecoding = info.llmConfig.supportSpeculativeDecoding
     val configs: MutableList<Config> =
       createLlmChatConfigs(
           defaultMaxToken = llmMaxToken,
@@ -1289,6 +1290,7 @@ constructor(
           defaultTemperature = info.llmConfig.defaultTemperature,
           accelerators = accelerators,
           supportThinking = llmSupportThinking,
+          supportSpeculativeDecoding = llmSupportSpeculativeDecoding,
         )
         .toMutableList()
     val model =
@@ -1306,6 +1308,7 @@ constructor(
         llmSupportTinyGarden = llmSupportTinyGarden,
         llmSupportMobileActions = llmSupportMobileActions,
         llmSupportThinking = llmSupportThinking,
+        llmSupportSpeculativeDecoding = llmSupportSpeculativeDecoding,
         llmMaxToken = llmMaxToken,
         accelerators = accelerators,
         // We assume all imported models are LLM for now.

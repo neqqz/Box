@@ -172,6 +172,7 @@ data class AllowedModel(
               defaultMaxContextLength = llmMaxContextLength,
               accelerators = accelerators,
               supportThinking = llmSupportThinking == true,
+              supportSpeculativeDecoding = llmSupportSpeculativeDecoding == true,
             )
           })
           .toMutableList()

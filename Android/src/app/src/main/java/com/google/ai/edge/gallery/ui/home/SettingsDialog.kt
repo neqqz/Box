@@ -135,63 +135,64 @@ private val APP_LANGUAGES = listOf(
   AppLanguage("zh-CN", "中文 (简体)"),
 )
 
-// GGUF engine setting keys and labels (from decompiled APK)
+// GGUF engine setting keys and labels (matching Box v3.5.7 LlamaCppModelHelper)
 private data class GgufSetting(
   val key: String,
   val label: String,
   val description: String,
   val type: GgufSettingType,
-  val options: List<String>? = null,
-  val defaultValue: String = "",
+  val options: List<Pair<String, Int>>? = null,
+  val defaultInt: Int = 0,
+  val defaultBool: Boolean = false,
 )
 
-private enum class GgufSettingType { DROPDOWN, SWITCH }
+private enum class GgufSettingType { INT_DROPDOWN, SWITCH }
 
 private val GGUF_SETTINGS = listOf(
   GgufSetting(
-    key = "context_size",
+    key = "llama_context_size",
     label = "Context size",
-    description = "Maximum number of tokens for context window",
-    type = GgufSettingType.DROPDOWN,
-    options = listOf("512", "1024", "2048", "4096", "8192"),
-    defaultValue = "2048",
+    description = "Tokens of conversation kept in memory. Auto caps by model and device RAM.",
+    type = GgufSettingType.INT_DROPDOWN,
+    options = listOf("Auto" to 0, "2048" to 2048, "4096" to 4096, "8192" to 8192, "16384" to 16384, "32768" to 32768),
+    defaultInt = 0,
   ),
   GgufSetting(
-    key = "cpu_threads",
+    key = "llama_num_threads",
     label = "CPU threads",
-    description = "Number of CPU threads for inference",
-    type = GgufSettingType.DROPDOWN,
-    options = listOf("1", "2", "4", "6", "8"),
-    defaultValue = "4",
+    description = "Threads used while generating. Auto uses performance cores only.",
+    type = GgufSettingType.INT_DROPDOWN,
+    options = listOf("Auto" to 0, "2" to 2, "4" to 4, "6" to 6, "8" to 8),
+    defaultInt = 0,
   ),
   GgufSetting(
-    key = "gpu_layers",
-    label = "GPU offload layers",
-    description = "Number of layers to offload to GPU (0 = CPU only)",
-    type = GgufSettingType.DROPDOWN,
-    options = listOf("0", "8", "16", "24", "32", "48", "64", "99"),
-    defaultValue = "99",
+    key = "llama_gpu_layers",
+    label = "GPU layers",
+    description = "Model layers offloaded to GPU when accelerator is GPU. Lower if a model fails on GPU.",
+    type = GgufSettingType.INT_DROPDOWN,
+    options = listOf("All (99)" to 99, "64" to 64, "48" to 48, "32" to 32, "24" to 24, "16" to 16, "8" to 8, "0 (CPU only)" to 0),
+    defaultInt = 99,
   ),
   GgufSetting(
-    key = "mmap",
-    label = "Memory-mapped loading (mmap)",
-    description = "Use memory-mapped I/O for model loading. Faster startup, more memory usage.",
+    key = "llama_use_mmap",
+    label = "Memory-map model file (mmap)",
+    description = "Off (default): read fully into RAM at load for faster first response. On: stream from storage.",
     type = GgufSettingType.SWITCH,
-    defaultValue = "true",
+    defaultBool = false,
   ),
   GgufSetting(
-    key = "mlock",
-    label = "Lock model in RAM (mlock)",
-    description = "Prevent model data from being swapped out. May improve latency.",
+    key = "llama_use_mlock",
+    label = "Lock model in memory (mlock)",
+    description = "Prevent model weights from being swapped out. Reserves RAM while loaded.",
     type = GgufSettingType.SWITCH,
-    defaultValue = "false",
+    defaultBool = false,
   ),
   GgufSetting(
-    key = "kv_cache_q8",
-    label = "KV-cache Q8 quantization",
-    description = "Quantize key/value cache to Q8 to save memory at slight quality cost.",
+    key = "llama_kv_cache_q8",
+    label = "Q8 KV cache",
+    description = "Halves the memory used by long conversations. Turn off if a model fails to load.",
     type = GgufSettingType.SWITCH,
-    defaultValue = "false",
+    defaultBool = false,
   ),
 )
 
@@ -249,150 +250,299 @@ fun SettingsDialog(
 
         Column(
           modifier = Modifier.verticalScroll(rememberScrollState()).weight(1f, fill = false),
-          verticalArrangement = Arrangement.spacedBy(16.dp),
+          verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
           val context = LocalContext.current
+          var expandAppearance by remember { mutableStateOf(true) }
+          var expandSecurity by remember { mutableStateOf(false) }
+          var expandNetwork by remember { mutableStateOf(false) }
+          var expandChat by remember { mutableStateOf(false) }
+          var expandDownloads by remember { mutableStateOf(false) }
+          var expandGguf by remember { mutableStateOf(false) }
+          var expandBoxAssist by remember { mutableStateOf(false) }
+          var expandAbout by remember { mutableStateOf(false) }
 
-          // ---- Theme base switcher (Auto / Light / Dark) ----
-          Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-            Text(
-              "Theme",
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-            )
-            MultiChoiceSegmentedButtonRow {
-              THEME_OPTIONS.forEachIndexed { index, theme ->
-                SegmentedButton(
-                  shape =
-                    SegmentedButtonDefaults.itemShape(index = index, count = THEME_OPTIONS.size),
-                  onCheckedChange = {
-                    selectedTheme = theme
-                    ThemeSettings.themeOverride.value = theme
-                    modelManagerViewModel.saveThemeOverride(theme)
-                    val uiModeManager =
-                      context.applicationContext.getSystemService(Context.UI_MODE_SERVICE)
-                        as UiModeManager
-                    if (theme == Theme.THEME_AUTO) {
-                      uiModeManager.setApplicationNightMode(UiModeManager.MODE_NIGHT_AUTO)
-                    } else if (theme == Theme.THEME_LIGHT) {
-                      uiModeManager.setApplicationNightMode(UiModeManager.MODE_NIGHT_NO)
-                    } else {
-                      uiModeManager.setApplicationNightMode(UiModeManager.MODE_NIGHT_YES)
-                    }
-                  },
-                  checked = theme == selectedTheme,
-                  label = { Text(themeLabel(theme)) },
+          SettingsAccordionSection(
+            title = "Appearance",
+            expanded = expandAppearance,
+            onToggle = { expandAppearance = !expandAppearance },
+          ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+              // ---- Theme base switcher (Auto / Light / Dark) ----
+              Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+                Text(
+                  "Theme",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                )
+                MultiChoiceSegmentedButtonRow {
+                  THEME_OPTIONS.forEachIndexed { index, theme ->
+                    SegmentedButton(
+                      shape =
+                        SegmentedButtonDefaults.itemShape(index = index, count = THEME_OPTIONS.size),
+                      onCheckedChange = {
+                        selectedTheme = theme
+                        ThemeSettings.themeOverride.value = theme
+                        modelManagerViewModel.saveThemeOverride(theme)
+                        val uiModeManager =
+                          context.applicationContext.getSystemService(Context.UI_MODE_SERVICE)
+                            as UiModeManager
+                        if (theme == Theme.THEME_AUTO) {
+                          uiModeManager.setApplicationNightMode(UiModeManager.MODE_NIGHT_AUTO)
+                        } else if (theme == Theme.THEME_LIGHT) {
+                          uiModeManager.setApplicationNightMode(UiModeManager.MODE_NIGHT_NO)
+                        } else {
+                          uiModeManager.setApplicationNightMode(UiModeManager.MODE_NIGHT_YES)
+                        }
+                      },
+                      checked = theme == selectedTheme,
+                      label = { Text(themeLabel(theme)) },
+                    )
+                  }
+                }
+              }
+
+              // ---- Custom Theme Picker ----
+              CustomThemeSection(context)
+
+              // ---- Font Picker ----
+              FontPickerSection(context)
+
+              // ---- Language Switcher ----
+              LanguageSwitcherSection(context)
+            }
+          }
+
+          SettingsAccordionSection(
+            title = "Privacy & Security",
+            expanded = expandSecurity,
+            onToggle = { expandSecurity = !expandSecurity },
+          ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+              // ---- Biometric lock toggle ----
+              val dbEncEnabled by BiometricEncryptionManager.isEnabledFlow.collectAsState()
+              Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+                Text(
+                  "Biometric lock",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                )
+                Text(
+                  if (dbEncEnabled) "Covered by database encryption — disable that first to use this."
+                  else "Require biometric authentication to access the app.",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val biometricLockEnabled = remember {
+                  mutableStateOf(com.google.ai.edge.gallery.security.AppLockManager.isBiometricLockEnabled())
+                }
+                Row(
+                  modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Text(
+                    if (biometricLockEnabled.value) "Enabled" else "Disabled",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (dbEncEnabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    else MaterialTheme.colorScheme.onSurface,
+                  )
+                  androidx.compose.material3.Switch(
+                    checked = biometricLockEnabled.value,
+                    enabled = !dbEncEnabled,
+                    onCheckedChange = {
+                      com.google.ai.edge.gallery.security.AppLockManager.setBiometricLockEnabled(context, it)
+                      biometricLockEnabled.value = it
+                    },
+                  )
+                }
+              }
+
+              // ---- Allow screenshots toggle ----
+              Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+                Text(
+                  "Allow screenshots",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                )
+                Text(
+                  "Allow the app to appear in screenshots and screen recordings. Off by default for privacy.",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val screenshotsEnabled = remember {
+                  mutableStateOf(com.google.ai.edge.gallery.security.AppLockManager.isScreenshotsEnabled())
+                }
+                Row(
+                  modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Text(
+                    if (screenshotsEnabled.value) "Enabled" else "Disabled",
+                    style = MaterialTheme.typography.bodyMedium,
+                  )
+                  androidx.compose.material3.Switch(
+                    checked = screenshotsEnabled.value,
+                    onCheckedChange = {
+                      com.google.ai.edge.gallery.security.AppLockManager.setScreenshotsEnabled(context, it)
+                      screenshotsEnabled.value = it
+                    },
+                  )
+                }
+              }
+
+              // ---- Biometric database encryption toggle ----
+              BiometricEncryptionSection(context)
+
+              // ---- Privacy notice ----
+              Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+                Text(
+                  "Privacy",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                )
+                Text(
+                  "Box is a privacy-focused fork of Google AI Edge Gallery. " +
+                    "Chat history is encrypted with SQLCipher. " +
+                    "Biometric authentication protects app access. " +
+                    "Not affiliated with Google.",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
               }
             }
           }
 
-          // ---- Custom Theme Picker ----
-          CustomThemeSection(context)
-
-          // ---- Font Picker ----
-          FontPickerSection(context)
-
-          // ---- Language Switcher ----
-          LanguageSwitcherSection(context)
-
-          // ---- GGUF Settings ----
-          GgufSettingsSection(context)
-
-          // ---- HF Token management ----
-          Column(
-            modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+          SettingsAccordionSection(
+            title = "Network & Tools",
+            expanded = expandNetwork,
+            onToggle = { expandNetwork = !expandNetwork },
           ) {
-            Text(
-              "HuggingFace access token",
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-            )
-            val curHfToken = hfToken
-            if (curHfToken != null && curHfToken.accessToken.isNotEmpty()) {
-              Text(
-                curHfToken.accessToken.substring(0, min(16, curHfToken.accessToken.length)) + "...",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-              Text(
-                "Expires at: ${dateFormatter.format(Instant.ofEpochMilli(curHfToken.expiresAtMs))}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            } else {
-              Text(
-                "Not available",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-              Text(
-                "The token will be automatically retrieved when a gated model is downloaded",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-              OutlinedButton(
-                onClick = {
-                  modelManagerViewModel.clearAccessToken()
-                  hfToken = null
-                },
-                enabled = curHfToken != null,
-              ) {
-                Text("Clear")
-              }
-              val handleSaveToken = {
-                modelManagerViewModel.saveAccessToken(
-                  accessToken = customHfToken,
-                  refreshToken = "",
-                  expiresAt = System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365 * 10,
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+              // ---- Offline mode toggle ----
+              Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+                Text(
+                  "Offline mode",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
                 )
-                hfToken = modelManagerViewModel.getTokenStatusAndData().data
-                focusManager.clearFocus()
-              }
-              BasicTextField(
-                value = customHfToken,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { handleSaveToken() }),
-                modifier =
-                  Modifier.fillMaxWidth()
-                    .padding(top = 4.dp)
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { isFocused = it.isFocused },
-                onValueChange = { customHfToken = it },
-                textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
-              ) { innerTextField ->
-                Box(
-                  modifier =
-                    Modifier.border(
-                        width = if (isFocused) 2.dp else 1.dp,
-                        color =
-                          if (isFocused) MaterialTheme.colorScheme.primary
-                          else MaterialTheme.colorScheme.outline,
-                        shape = CircleShape,
-                      )
-                      .height(40.dp),
-                  contentAlignment = Alignment.CenterStart,
+                Text(
+                  "Block all network requests. Models must be pre-downloaded.",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val offlineEnabled = com.google.ai.edge.gallery.security.OfflineMode.isEnabled.collectAsState()
+                Row(
+                  modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
                 ) {
-                  Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.padding(start = 16.dp).weight(1f)) {
-                      if (customHfToken.isEmpty()) {
-                        Text(
-                          "Enter token manually",
-                          color = MaterialTheme.colorScheme.onSurfaceVariant,
-                          style = MaterialTheme.typography.bodySmall,
-                        )
-                      }
-                      innerTextField()
-                    }
-                    if (customHfToken.isNotEmpty()) {
-                      IconButton(modifier = Modifier.offset(x = 1.dp), onClick = handleSaveToken) {
-                        Icon(
-                          Icons.Rounded.CheckCircle,
-                          contentDescription = stringResource(R.string.cd_done_icon),
-                        )
+                  Text(
+                    if (offlineEnabled.value) "Enabled" else "Disabled",
+                    style = MaterialTheme.typography.bodyMedium,
+                  )
+                  androidx.compose.material3.Switch(
+                    checked = offlineEnabled.value,
+                    onCheckedChange = {
+                      com.google.ai.edge.gallery.security.OfflineMode.setEnabled(context, it)
+                    },
+                  )
+                }
+              }
+
+              // ---- HF Token management ----
+              Column(
+                modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+              ) {
+                Text(
+                  "HuggingFace access token",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                )
+                val curHfToken = hfToken
+                if (curHfToken != null && curHfToken.accessToken.isNotEmpty()) {
+                  Text(
+                    curHfToken.accessToken.substring(0, min(16, curHfToken.accessToken.length)) + "...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                  Text(
+                    "Expires at: ${dateFormatter.format(Instant.ofEpochMilli(curHfToken.expiresAtMs))}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                } else {
+                  Text(
+                    "Not available",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                  Text(
+                    "The token will be automatically retrieved when a gated model is downloaded",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                  OutlinedButton(
+                    onClick = {
+                      modelManagerViewModel.clearAccessToken()
+                      hfToken = null
+                    },
+                    enabled = curHfToken != null,
+                  ) {
+                    Text("Clear")
+                  }
+                  val handleSaveToken = {
+                    modelManagerViewModel.saveAccessToken(
+                      accessToken = customHfToken,
+                      refreshToken = "",
+                      expiresAt = System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365 * 10,
+                    )
+                    hfToken = modelManagerViewModel.getTokenStatusAndData().data
+                    focusManager.clearFocus()
+                  }
+                  BasicTextField(
+                    value = customHfToken,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { handleSaveToken() }),
+                    modifier =
+                      Modifier.fillMaxWidth()
+                        .padding(top = 4.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { isFocused = it.isFocused },
+                    onValueChange = { customHfToken = it },
+                    textStyle = TextStyle(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+                  ) { innerTextField ->
+                    Box(
+                      modifier =
+                        Modifier.border(
+                            width = if (isFocused) 2.dp else 1.dp,
+                            color =
+                              if (isFocused) MaterialTheme.colorScheme.primary
+                              else MaterialTheme.colorScheme.outline,
+                            shape = CircleShape,
+                          )
+                          .height(40.dp),
+                      contentAlignment = Alignment.CenterStart,
+                    ) {
+                      Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.padding(start = 16.dp).weight(1f)) {
+                          if (customHfToken.isEmpty()) {
+                            Text(
+                              "Enter token manually",
+                              color = MaterialTheme.colorScheme.onSurfaceVariant,
+                              style = MaterialTheme.typography.bodySmall,
+                            )
+                          }
+                          innerTextField()
+                        }
+                        if (customHfToken.isNotEmpty()) {
+                          IconButton(modifier = Modifier.offset(x = 1.dp), onClick = handleSaveToken) {
+                            Icon(
+                              Icons.Rounded.CheckCircle,
+                              contentDescription = stringResource(R.string.cd_done_icon),
+                            )
+                          }
+                        }
                       }
                     }
                   }
@@ -401,182 +551,95 @@ fun SettingsDialog(
             }
           }
 
-          // ---- Biometric lock toggle ----
-          val dbEncEnabled by BiometricEncryptionManager.isEnabledFlow.collectAsState()
-          Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-            Text(
-              "Biometric lock",
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-            )
-            Text(
-              if (dbEncEnabled) "Covered by database encryption — disable that first to use this."
-              else "Require biometric authentication to access the app.",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            val biometricLockEnabled = remember { mutableStateOf(com.google.ai.edge.gallery.security.AppLockManager.isBiometricLockEnabled()) }
-            Row(
-              modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Text(
-                if (biometricLockEnabled.value) "Enabled" else "Disabled",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (dbEncEnabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                        else MaterialTheme.colorScheme.onSurface,
-              )
-              androidx.compose.material3.Switch(
-                checked = biometricLockEnabled.value,
-                enabled = !dbEncEnabled,
-                onCheckedChange = {
-                  com.google.ai.edge.gallery.security.AppLockManager.setBiometricLockEnabled(context, it)
-                  biometricLockEnabled.value = it
-                },
-              )
-            }
-          }
-
-          // ---- Allow screenshots toggle ----
-          Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-            Text(
-              "Allow screenshots",
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-            )
-            Text(
-              "Allow the app to appear in screenshots and screen recordings. Off by default for privacy.",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            val screenshotsEnabled = remember {
-              mutableStateOf(com.google.ai.edge.gallery.security.AppLockManager.isScreenshotsEnabled())
-            }
-            Row(
-              modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Text(
-                if (screenshotsEnabled.value) "Enabled" else "Disabled",
-                style = MaterialTheme.typography.bodyMedium,
-              )
-              androidx.compose.material3.Switch(
-                checked = screenshotsEnabled.value,
-                onCheckedChange = {
-                  com.google.ai.edge.gallery.security.AppLockManager.setScreenshotsEnabled(context, it)
-                  screenshotsEnabled.value = it
-                },
-              )
-            }
-          }
-
-          // ---- Biometric database encryption toggle ----
-          BiometricEncryptionSection(context)
-
-          // ---- Offline mode toggle ----
-          Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-            Text(
-              "Offline mode",
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-            )
-            Text(
-              "Block all network requests. Models must be pre-downloaded.",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            val offlineEnabled = com.google.ai.edge.gallery.security.OfflineMode.isEnabled.collectAsState()
-            Row(
-              modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Text(
-                if (offlineEnabled.value) "Enabled" else "Disabled",
-                style = MaterialTheme.typography.bodyMedium,
-              )
-              androidx.compose.material3.Switch(
-                checked = offlineEnabled.value,
-                onCheckedChange = {
-                  com.google.ai.edge.gallery.security.OfflineMode.setEnabled(context, it)
-                },
-              )
-            }
-          }
-
-          // ---- Privacy notice ----
-          Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-            Text(
-              "Privacy",
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-            )
-            Text(
-              "Box is a privacy-focused fork of Google AI Edge Gallery. " +
-                "Chat history is encrypted with SQLCipher. " +
-                "Biometric authentication protects app access. " +
-                "Not affiliated with Google.",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          }
-
-          // ---- Third party licenses ----
-          Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-            Text(
-              "Third-party libraries",
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-            )
-            OutlinedButton(onClick = { showLicenses = true }) {
-              Text("View licenses")
-            }
-          }
-
-          // ---- About ----
-          Column(
-            modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+          SettingsAccordionSection(
+            title = "Chat",
+            expanded = expandChat,
+            onToggle = { expandChat = !expandChat },
           ) {
-            Text(
-              "About",
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-            )
-            Text(
-              "Developed by Jegly",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-              "Box fork version: ${BuildConfig.VERSION_NAME}",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            ClickableLink(
-              url = "https://github.com/jegly",
-              linkText = "github.com/jegly",
-              modifier = Modifier.padding(top = 2.dp),
-            )
-            ClickableLink(
-              url = "https://www.jegly.xyz",
-              linkText = "www.jegly.xyz",
-              modifier = Modifier.padding(top = 2.dp),
-            )
+            ChatPrefsSection(context)
           }
 
-          // ---- Privacy & Legal ----
-          Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
-            Text(
-              "Privacy & Legal",
-              style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-            )
-            ClickableLink(
-              url = "https://ai.google.dev/gemma/terms",
-              linkText = stringResource(R.string.tos_dialog_title_gemma),
-              modifier = Modifier.padding(top = 4.dp),
-            )
-            ClickableLink(
-              url = "https://ai.google.dev/gemma/prohibited_use_policy",
-              linkText = stringResource(R.string.settings_dialog_gemma_prohibited_use_policy),
-              modifier = Modifier.padding(top = 8.dp),
-            )
+          SettingsAccordionSection(
+            title = "Downloads & Updates",
+            expanded = expandDownloads,
+            onToggle = { expandDownloads = !expandDownloads },
+          ) {
+            DownloadsUpdatesSection(context)
+          }
+
+          SettingsAccordionSection(
+            title = "GGUF Models",
+            expanded = expandGguf,
+            onToggle = { expandGguf = !expandGguf },
+          ) {
+            GgufSettingsSection(context)
+          }
+
+          SettingsAccordionSection(
+            title = "Box Assist",
+            expanded = expandBoxAssist,
+            onToggle = { expandBoxAssist = !expandBoxAssist },
+          ) {
+            BoxAssistSettingsSection(context)
+          }
+
+          SettingsAccordionSection(
+            title = "About",
+            expanded = expandAbout,
+            onToggle = { expandAbout = !expandAbout },
+          ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+              Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+                Text(
+                  "Third-party libraries",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                )
+                OutlinedButton(onClick = { showLicenses = true }) {
+                  Text("View licenses")
+                }
+              }
+              Column(
+                modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+              ) {
+                Text(
+                  "Developed by Jegly",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                  "Box fork version: ${BuildConfig.VERSION_NAME}",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                ClickableLink(
+                  url = "https://github.com/jegly",
+                  linkText = "github.com/jegly",
+                  modifier = Modifier.padding(top = 2.dp),
+                )
+                ClickableLink(
+                  url = "https://www.jegly.xyz",
+                  linkText = "www.jegly.xyz",
+                  modifier = Modifier.padding(top = 2.dp),
+                )
+              }
+              Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+                Text(
+                  "Privacy & Legal",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                )
+                ClickableLink(
+                  url = "https://ai.google.dev/gemma/terms",
+                  linkText = stringResource(R.string.tos_dialog_title_gemma),
+                  modifier = Modifier.padding(top = 4.dp),
+                )
+                ClickableLink(
+                  url = "https://ai.google.dev/gemma/prohibited_use_policy",
+                  linkText = stringResource(R.string.settings_dialog_gemma_prohibited_use_policy),
+                  modifier = Modifier.padding(top = 8.dp),
+                )
+              }
+            }
           }
         }
 
@@ -876,91 +939,299 @@ private fun LanguageSwitcherSection(context: Context) {
   }
 }
 
-// ======== GGUF Settings ========
+// ======== Accordion & New v3.5.7 Sections ========
 
 @Composable
-private fun GgufSettingsSection(context: Context) {
-  var expanded by remember { mutableStateOf(false) }
-  val prefs = remember { context.getSharedPreferences(ThemeSettings.PREFS_NAME, Context.MODE_PRIVATE) }
-
-  Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+private fun SettingsAccordionSection(
+  title: String,
+  expanded: Boolean,
+  onToggle: () -> Unit,
+  content: @Composable () -> Unit,
+) {
+  Column(
+    modifier = Modifier
+      .fillMaxWidth()
+      .border(
+        width = 1.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(12.dp),
+      )
+      .padding(horizontal = 12.dp, vertical = 10.dp)
+  ) {
     Row(
-      modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+      modifier = Modifier.fillMaxWidth().clickable { onToggle() },
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      Column(modifier = Modifier.weight(1f)) {
-        Text(
-          "GGUF engine settings",
-          style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
-        )
-        Text(
-          "Advanced settings for GGUF model inference.",
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      }
+      Text(
+        title,
+        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+      )
       Icon(
         if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
         contentDescription = if (expanded) "Collapse" else "Expand",
       )
     }
-
     AnimatedVisibility(visible = expanded) {
-      Column(
-        modifier = Modifier.padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-      ) {
-        GGUF_SETTINGS.forEach { setting ->
-          when (setting.type) {
-            GgufSettingType.DROPDOWN -> {
-              val current = prefs.getString(setting.key, setting.defaultValue) ?: setting.defaultValue
-              Column {
-                Text(setting.label, style = MaterialTheme.typography.bodySmall)
-                Text(
-                  setting.description,
-                  style = MaterialTheme.typography.labelSmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                DropdownPicker(
-                  label = setting.label,
-                  options = setting.options!!,
-                  selected = current,
-                  onSelect = { idx ->
-                    prefs.edit().putString(setting.key, setting.options[idx]).apply()
-                  },
-                )
-              }
+      Column(modifier = Modifier.padding(top = 10.dp)) {
+        content()
+      }
+    }
+  }
+}
+
+@Composable
+private fun ChatPrefsSection(context: Context) {
+  val prefs = remember { context.getSharedPreferences(ThemeSettings.PREFS_NAME, Context.MODE_PRIVATE) }
+  var showTps by remember { mutableStateOf(prefs.getBoolean("chat_show_tps", false)) }
+  var restoreMemory by remember { mutableStateOf(prefs.getBoolean("chat_restore_memory", true)) }
+
+  Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Column(modifier = Modifier.weight(1f)) {
+        Text("Show tokens per second", style = MaterialTheme.typography.bodySmall)
+        Text(
+          "Display generation speed below each response.",
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      androidx.compose.material3.Switch(
+        checked = showTps,
+        onCheckedChange = {
+          showTps = it
+          prefs.edit().putBoolean("chat_show_tps", it).apply()
+        },
+      )
+    }
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Column(modifier = Modifier.weight(1f)) {
+        Text("Restore chat memory", style = MaterialTheme.typography.bodySmall)
+        Text(
+          "Re-feed recent conversation context when reopening a saved chat.",
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      androidx.compose.material3.Switch(
+        checked = restoreMemory,
+        onCheckedChange = {
+          restoreMemory = it
+          prefs.edit().putBoolean("chat_restore_memory", it).apply()
+        },
+      )
+    }
+  }
+}
+
+@Composable
+private fun DownloadsUpdatesSection(context: Context) {
+  val prefs = remember { context.getSharedPreferences(ThemeSettings.PREFS_NAME, Context.MODE_PRIVATE) }
+  var wifiOnly by remember { mutableStateOf(prefs.getBoolean("downloads_wifi_only", false)) }
+  var autoUpdate by remember { mutableStateOf(prefs.getBoolean("auto_update_check", true)) }
+
+  Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Column(modifier = Modifier.weight(1f)) {
+        Text("Download models on Wi-Fi only", style = MaterialTheme.typography.bodySmall)
+        Text(
+          "Wait for an unmetered network instead of using mobile data.",
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      androidx.compose.material3.Switch(
+        checked = wifiOnly,
+        onCheckedChange = {
+          wifiOnly = it
+          prefs.edit().putBoolean("downloads_wifi_only", it).apply()
+        },
+      )
+    }
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Column(modifier = Modifier.weight(1f)) {
+        Text("Check for updates automatically", style = MaterialTheme.typography.bodySmall)
+        Text(
+          "Check GitHub for a newer Box release when the app opens.",
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      androidx.compose.material3.Switch(
+        checked = autoUpdate,
+        onCheckedChange = {
+          autoUpdate = it
+          prefs.edit().putBoolean("auto_update_check", it).apply()
+        },
+      )
+    }
+  }
+}
+
+@Composable
+private fun BoxAssistSettingsSection(context: Context) {
+  val prefs = remember { context.getSharedPreferences(ThemeSettings.PREFS_NAME, Context.MODE_PRIVATE) }
+  var speechRate by remember { mutableFloatStateOf(prefs.getFloat("boxassist_speech_rate", 0.0f)) }
+  var hazardsOnly by remember { mutableStateOf(prefs.getBoolean("boxassist_hazards_only", false)) }
+  var haptics by remember { mutableStateOf(prefs.getBoolean("boxassist_haptics", true)) }
+  var threshold by remember { mutableFloatStateOf(prefs.getFloat("boxassist_score_threshold", 0.3f)) }
+
+  Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Text(
+      "Spoken camera assistance for blind and low-vision users. Applied next time you open Box Assist.",
+      style = MaterialTheme.typography.labelSmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Column {
+      Text(
+        if (speechRate <= 0.01f) "Speech rate: System" else "Speech rate: ${String.format("%.2f", speechRate)}×",
+        style = MaterialTheme.typography.bodySmall,
+      )
+      Slider(
+        value = speechRate,
+        onValueChange = {
+          speechRate = it
+          prefs.edit().putFloat("boxassist_speech_rate", it).apply()
+        },
+        valueRange = 0.0f..2.0f,
+      )
+    }
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Column(modifier = Modifier.weight(1f)) {
+        Text("Announce hazards only", style = MaterialTheme.typography.bodySmall)
+        Text(
+          "Live mode calls out only people, vehicles and obstacles.",
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      androidx.compose.material3.Switch(
+        checked = hazardsOnly,
+        onCheckedChange = {
+          hazardsOnly = it
+          prefs.edit().putBoolean("boxassist_hazards_only", it).apply()
+        },
+      )
+    }
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Column(modifier = Modifier.weight(1f)) {
+        Text("Haptic feedback", style = MaterialTheme.typography.bodySmall)
+        Text(
+          "Vibration cues for listening, thinking and hazards.",
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      androidx.compose.material3.Switch(
+        checked = haptics,
+        onCheckedChange = {
+          haptics = it
+          prefs.edit().putBoolean("boxassist_haptics", it).apply()
+        },
+      )
+    }
+    Column {
+      Text(
+        "Live callout threshold: ${(threshold * 100).roundToInt()}%",
+        style = MaterialTheme.typography.bodySmall,
+      )
+      Slider(
+        value = threshold,
+        onValueChange = {
+          threshold = it
+          prefs.edit().putFloat("boxassist_score_threshold", it).apply()
+        },
+        valueRange = 0.15f..0.7f,
+      )
+    }
+  }
+}
+
+// ======== GGUF Settings ========
+
+@Composable
+private fun GgufSettingsSection(context: Context) {
+  val prefs = remember { context.getSharedPreferences(ThemeSettings.PREFS_NAME, Context.MODE_PRIVATE) }
+
+  Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Text(
+      "Engine options for imported GGUF models (llama.cpp). Applied the next time a GGUF model loads.",
+      style = MaterialTheme.typography.labelSmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    GGUF_SETTINGS.forEach { setting ->
+      when (setting.type) {
+        GgufSettingType.INT_DROPDOWN -> {
+          val currentVal = prefs.getInt(setting.key, setting.defaultInt)
+          val options = setting.options!!
+          val selectedLabel = options.firstOrNull { it.second == currentVal }?.first ?: currentVal.toString()
+          Column {
+            Text(setting.label, style = MaterialTheme.typography.bodySmall)
+            Text(
+              setting.description,
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            DropdownPicker(
+              label = setting.label,
+              options = options.map { it.first },
+              selected = selectedLabel,
+              onSelect = { idx ->
+                prefs.edit().putInt(setting.key, options[idx].second).apply()
+              },
+            )
+          }
+        }
+        GgufSettingType.SWITCH -> {
+          var checked by remember(setting.key) {
+            mutableStateOf(prefs.getBoolean(setting.key, setting.defaultBool))
+          }
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(setting.label, style = MaterialTheme.typography.bodySmall)
+              Text(
+                setting.description,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
             }
-            GgufSettingType.SWITCH -> {
-              val current = prefs.getBoolean(setting.key, setting.defaultValue == "true")
-              Column {
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically,
-                ) {
-                  Column(modifier = Modifier.weight(1f)) {
-                    Text(setting.label, style = MaterialTheme.typography.bodySmall)
-                    Text(
-                      setting.description,
-                      style = MaterialTheme.typography.labelSmall,
-                      color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                  }
-                  Spacer(modifier = Modifier.width(8.dp))
-                  var checked by remember(setting.key) { mutableStateOf(current) }
-                  androidx.compose.material3.Switch(
-                    checked = checked,
-                    onCheckedChange = {
-                      checked = it
-                      prefs.edit().putBoolean(setting.key, it).apply()
-                    },
-                  )
-                }
-              }
-            }
+            Spacer(modifier = Modifier.width(8.dp))
+            androidx.compose.material3.Switch(
+              checked = checked,
+              onCheckedChange = {
+                checked = it
+                prefs.edit().putBoolean(setting.key, it).apply()
+              },
+            )
           }
         }
       }
