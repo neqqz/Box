@@ -1,0 +1,54 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "ci/**", "feat/**"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install NDK and CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Fetch Vulkan and SPIR-V headers (NDK lacks them)
+        run: |
+          git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git "$RUNNER_TEMP/vulkan-headers"
+          echo "VULKAN_HEADERS_DIR=$RUNNER_TEMP/vulkan-headers" >> "$GITHUB_ENV"
+          git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git "$RUNNER_TEMP/spirv-headers"
+          echo "SPIRV_HEADERS_DIR=$RUNNER_TEMP/spirv-headers" >> "$GITHUB_ENV"
+
+      - name: Configure release signing if secrets are present
+        env:
+          LOCAL_PROPERTIES: ${{ secrets.LOCAL_PROPERTIES }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$LOCAL_PROPERTIES" ]; then
+            printf '%s\n' "$LOCAL_PROPERTIES" | tr -d '\r' > Android/src/local.properties
+          fi
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > Android/src/app/release.keystore
+          fi
+
+      - name: Build release APK
+        working-directory: Android/src
+        run: ./gradlew --no-daemon assembleRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: box-apk
+          path: Android/src/app/build/outputs/apk/release/*.apk
