@@ -1,0 +1,4 @@
+# Local decompilation artifacts and prebuilt APKs are not part of the source tree.
+*.apk
+/decompiled/
+/claude_report.md

@@ -11,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.google.ai.edge.gallery.customtasks.common.CustomTask
@@ -289,7 +290,7 @@ class IrisEngine {
       val base = tokenIds[t].coerceIn(0, 151935) * 2560
       val dst = t * 2560
       for (d in 0 until 2560) {
-        hidden[dst + d] = Float.intBitsToFloat(embShort.get(base + d).toInt() shl 16)
+        hidden[dst + d] = java.lang.Float.intBitsToFloat(embShort.get(base + d).toInt() shl 16)
       }
     }
 
@@ -485,8 +486,6 @@ class IrisTask @Inject constructor() : CustomTask {
       "Text-to-image with Speridlabs' iris-3b Turbo pixel-space diffusion transformer on phone GPU " +
         "via 20 LiteRT graphs. 768×768, 4 steps.",
     shortDescription = "iris-3b on-device text-to-image",
-    showRunAgainButton = false,
-    showBenchmarkButton = false,
   )
 
   override fun initializeModelFn(context: Context, coroutineScope: CoroutineScope, model: Model, onDone: (String) -> Unit) {

@@ -70,7 +70,7 @@ class FluxKleinEngine {
     )
     val raf = RandomAccessFile(File(dir, "qwen_embed_fp16.bin"), "r")
     embedRaf = raf
-    embedMap = raf.channel.map(FileChannel.MapMode.READ_ONLY, 0L, raf.length()).order(ByteOrder.LITTLE_ENDIAN)
+    embedMap = raf.channel.map(FileChannel.MapMode.READ_ONLY, 0L, raf.length()).also { it.order(ByteOrder.LITTLE_ENDIAN) }
     encCos = readAssetFloats(context, "fluxklein/enc_cos.bin")
     encSin = readAssetFloats(context, "fluxklein/enc_sin.bin")
     ditCos = readAssetFloats(context, "fluxklein/dit_cos.bin")
@@ -97,10 +97,10 @@ class FluxKleinEngine {
       gpuOptions = CompiledModel.GpuOptions(precision = CompiledModel.GpuOptions.Precision.FP32)
     }
     val cm = try {
-      CompiledModel.create(File(dir, fileName).absolutePath(), gpuOpts, environment)
+      CompiledModel.create(File(dir, fileName).absolutePath, gpuOpts, environment)
     } catch (t: Throwable) {
       Log.w(TAG, "$fileName failed on GPU, retrying on CPU", t)
-      CompiledModel.create(File(dir, fileName).absolutePath(), CompiledModel.Options(Accelerator.CPU), environment)
+      CompiledModel.create(File(dir, fileName).absolutePath, CompiledModel.Options(Accelerator.CPU), environment)
     }
     val inBufs = cm.createInputBuffers()
     val outBufs = cm.createOutputBuffers()
@@ -299,8 +299,6 @@ class FluxKleinTask @Inject constructor() : CustomTask {
       "Text-to-image with Black Forest Labs' FLUX.2 [klein] 4B diffusion transformer, running " +
         "fully on phone GPU via chunked LiteRT graphs. 256×256, 4 steps.",
     shortDescription = "FLUX.2 on-device text-to-image",
-    showRunAgainButton = false,
-    showBenchmarkButton = false,
   )
 
   override fun initializeModelFn(context: Context, coroutineScope: CoroutineScope, model: Model, onDone: (String) -> Unit) {

@@ -71,7 +71,7 @@ class BonsaiEngine {
   private fun runCpuGraph(fileName: String, inputs: List<Any>): List<FloatArray> {
     val dir = modelDir ?: error("BonsaiEngine not loaded")
     val environment = env ?: error("Environment closed")
-    val cm = CompiledModel.create(File(dir, fileName).absolutePath(), CompiledModel.Options(Accelerator.CPU), environment)
+    val cm = CompiledModel.create(File(dir, fileName).absolutePath, CompiledModel.Options(Accelerator.CPU), environment)
     val inBufs = cm.createInputBuffers()
     val outBufs = cm.createOutputBuffers()
     try {
@@ -206,8 +206,6 @@ class BonsaiTask @Inject constructor() : CustomTask {
       "Text-to-image with Bonsai Image 4B, a ternary-weight build of FLUX.2 [klein] running on " +
         "CPU via three LiteRT graphs. 512×512, 4 steps.",
     shortDescription = "512×512 on-device text-to-image",
-    showRunAgainButton = false,
-    showBenchmarkButton = false,
   )
 
   override fun initializeModelFn(context: Context, coroutineScope: CoroutineScope, model: Model, onDone: (String) -> Unit) {

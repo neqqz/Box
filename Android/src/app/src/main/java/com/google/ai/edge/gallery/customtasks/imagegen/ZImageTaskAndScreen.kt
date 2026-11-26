@@ -74,7 +74,7 @@ class ZImageEngine {
     )
     val raf = RandomAccessFile(File(tokDir, "qwen_embed_fp16.bin"), "r")
     embedRaf = raf
-    embedMap = raf.channel.map(FileChannel.MapMode.READ_ONLY, 0L, raf.length()).order(ByteOrder.LITTLE_ENDIAN)
+    embedMap = raf.channel.map(FileChannel.MapMode.READ_ONLY, 0L, raf.length()).also { it.order(ByteOrder.LITTLE_ENDIAN) }
     capPadToken = readAssetFloats(context, "zimage/zimage_cap_pad_token.bin")
     tembMlp = readAssetFloats(context, "zimage/zimage_temb_mlp.bin")
     require(capPadToken.size == 3840 && tembMlp.size == 525568)
@@ -93,10 +93,10 @@ class ZImageEngine {
       gpuOptions = CompiledModel.GpuOptions(precision = CompiledModel.GpuOptions.Precision.FP32)
     }
     val cm = try {
-      CompiledModel.create(File(dir, fileName).absolutePath(), gpuOpts, environment)
+      CompiledModel.create(File(dir, fileName).absolutePath, gpuOpts, environment)
     } catch (t: Throwable) {
       Log.w(TAG, "$fileName failed on GPU, retrying on CPU", t)
-      CompiledModel.create(File(dir, fileName).absolutePath(), CompiledModel.Options(Accelerator.CPU), environment)
+      CompiledModel.create(File(dir, fileName).absolutePath, CompiledModel.Options(Accelerator.CPU), environment)
     }
     val inBufs = cm.createInputBuffers()
     val outBufs = cm.createOutputBuffers()
@@ -331,8 +331,6 @@ class ZImageTask @Inject constructor() : CustomTask {
       "Text-to-image with Alibaba Tongyi's Z-Image-Turbo 6B diffusion transformer, running " +
         "fully on phone GPU via chunked LiteRT graphs. 256×256, 9 steps.",
     shortDescription = "Z-Image on-device text-to-image",
-    showRunAgainButton = false,
-    showBenchmarkButton = false,
   )
 
   override fun initializeModelFn(context: Context, coroutineScope: CoroutineScope, model: Model, onDone: (String) -> Unit) {

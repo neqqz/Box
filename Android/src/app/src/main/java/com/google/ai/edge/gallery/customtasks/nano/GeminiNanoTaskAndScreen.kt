@@ -183,6 +183,7 @@ import java.util.concurrent.ExecutionException
 import javax.inject.Inject
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -259,7 +260,7 @@ class NanoChatViewModel @Inject constructor(
       val loaded = chatRepository.getMessagesSync(conv.id)
       messages.clear()
       loaded.forEach { msg ->
-        messages.add(NanoChatTurn(text = msg.content, isUser = msg.isUser))
+        messages.add(NanoChatTurn(text = msg.content, isUser = msg.role == "user"))
       }
     }
   }
@@ -272,7 +273,11 @@ class NanoChatViewModel @Inject constructor(
         modelName = "Gemini Nano",
       ).also { _activeConversation.value = it }
 
-      chatRepository.addMessage(conversationId = conv.id, isUser = isUser, content = text)
+      chatRepository.saveMessage(
+        conversationId = conv.id,
+        role = if (isUser) "user" else "assistant",
+        content = text,
+      )
       if (isUser && conv.title == "Nano Chat" && text.isNotBlank()) {
         val updated = conv.copy(title = text.take(48), updatedAt = System.currentTimeMillis())
         chatRepository.updateConversation(updated)
@@ -357,8 +362,6 @@ class GeminiNanoTask @Inject constructor() : CustomTask {
         "GenAI features (Summarize, Proofread, Rewrite, Chat, Describe, Prompt, Speech) use Gemini Nano " +
         "via AICore. Vision tools (Text, Barcode, Labels, Face, Pose, Face Mesh) work on all devices.",
     shortDescription = "ML Kit · NPU-accelerated on-device AI",
-    showRunAgainButton = false,
-    showBenchmarkButton = false,
   )
 
   override fun initializeModelFn(

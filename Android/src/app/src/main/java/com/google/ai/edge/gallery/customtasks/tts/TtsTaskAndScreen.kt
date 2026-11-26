@@ -143,15 +143,13 @@ class BoxTtsEngine {
 
       val config =
         getOfflineTtsConfig(
-          model = modelFile.absolutePath,
-          tokens = tokensFile.absolutePath,
+          modelDir = modelFile.parentFile?.absolutePath ?: espeakDir.absolutePath,
+          modelName = modelFile.name,
           lexicon = "",
           dataDir = espeakDir.absolutePath,
-          voices = voicesPath,
+          voices = if (voicesPath.isNotEmpty()) File(voicesPath).name else "",
           dictDir = "",
-           acousticModel = "",
           vocoder = "",
-          lang = if (voicesPath.isNotEmpty()) "en" else "",
         )
       val instance = OfflineTts(null, config)
       tts = instance

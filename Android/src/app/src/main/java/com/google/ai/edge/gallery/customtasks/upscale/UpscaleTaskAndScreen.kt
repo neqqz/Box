@@ -302,10 +302,10 @@ class UpscaleTask @Inject constructor() : CustomTask {
       icon = Icons.Outlined.HighQuality,
       models =
         mutableListOf(
-          Model("XLSR (fast, 4×)", "Fastest 4× super-resolution (~118 KB, bundled).", "", 118_352L, "xlsr.tflite", "v0.54.0"),
-          Model("Real-ESRGAN General (balanced, 4×)", "Balanced quality and speed (~4.9 MB, bundled).", "", 4_878_684L, "real_esrgan_general_x4v3.tflite", "v0.54.0"),
-          Model("Real-ESRGAN x4plus (quality, 4×)", "Highest-quality 4× upscaling (~67 MB, bundled).", "", 67_031_032L, "real_esrgan_x4plus.tflite", "v0.54.0"),
-          Model("EDSR x4 (GPU, 4×)", "Requires GPU delegate (~7.7 MB, bundled).", "", 7_714_836L, "edsr.tflite", "v1.0.0"),
+          Model(name = "XLSR (fast, 4×)", displayName = "Fastest 4× super-resolution (~118 KB, bundled).", info = "", sizeInBytes = 118_352L, downloadFileName = "xlsr.tflite", version = "v0.54.0"),
+          Model(name = "Real-ESRGAN General (balanced, 4×)", displayName = "Balanced quality and speed (~4.9 MB, bundled).", info = "", sizeInBytes = 4_878_684L, downloadFileName = "real_esrgan_general_x4v3.tflite", version = "v0.54.0"),
+          Model(name = "Real-ESRGAN x4plus (quality, 4×)", displayName = "Highest-quality 4× upscaling (~67 MB, bundled).", info = "", sizeInBytes = 67_031_032L, downloadFileName = "real_esrgan_x4plus.tflite", version = "v0.54.0"),
+          Model(name = "EDSR x4 (GPU, 4×)", displayName = "Requires GPU delegate (~7.7 MB, bundled).", info = "", sizeInBytes = 7_714_836L, downloadFileName = "edsr.tflite", version = "v1.0.0"),
         ),
       description =
         "Enhance and enlarge any photo on-device with AI super-resolution (4×). Pick an image, upscale it, and save the result — fully offline.",

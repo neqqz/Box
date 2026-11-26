@@ -527,7 +527,7 @@ class AudioScribeTask @Inject constructor() : CustomTask {
     model: Model,
     onDone: () -> Unit,
   ) {
-    (model.instance as? WhisperEngine)?.release()
+    (model.instance as? WhisperEngine)?.freeModel()
     model.instance = null
     onDone()
   }

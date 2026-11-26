@@ -102,8 +102,11 @@ class IdentifyEngine(private val mode: IdentifyMode, private val useImageNetNorm
         val nativeDir = context.applicationInfo.nativeLibraryDir
         runCatching {
           val env = Environment.create(
-            Environment.Option.DispatchLibraryDir to nativeDir,
-            Environment.Option.CompilerPluginLibraryDir to nativeDir,
+            context,
+            mapOf(
+              Environment.Option.DispatchLibraryDir to nativeDir,
+              Environment.Option.CompilerPluginLibraryDir to nativeDir,
+            ),
           )
           npuEnv = env
           CompiledModel.create(path, CompiledModel.Options(Accelerator.NPU), env)
@@ -286,12 +289,12 @@ class IdentifyTask @Inject constructor() : CustomTask {
       icon = Icons.Outlined.ImageSearch,
       models =
         mutableListOf(
-          Model("MobileNet V2 (fast)", "Identifies 1,000 everyday objects (~3.9 MB, bundled).", "", 3_887_792L, "mobilenet_v2_int8.tflite", "v1.0.0"),
-          Model("MobileNet V2 (Tensor G5 NPU)", "Pixel 10 Tensor G5 NPU build with automatic fallback (~8.4 MB, bundled).", "", 8_382_816L, "mobilenet_v2_g5.tflite", "v1.0.0"),
-          Model("MobileNet V3 Large", "Higher accuracy across 1,000 ImageNet classes (~5.8 MB, bundled).", "", 5_808_416L, "mobilenet_v3_large_dynamic_wi8_afp32.tflite", "v1.0.0"),
-          Model("MobileNet V3 Large (Tensor G5 NPU)", "Higher-accuracy Tensor G5 NPU build (~13.6 MB, bundled).", "", 13_619_632L, "mobilenet_v3_large_Google_Tensor_G5_apply_plugin.tflite", "v1.0.0"),
-          Model("PlantNet-300K ResNet18", "Identifies 1,081 plant species with botanical names (~47 MB, bundled).", "", 46_942_600L, "plantnet.tflite", "v1.0.0"),
-          Model("DM-Count Crowd", "Estimates crowd headcount in photos (~86 MB, bundled).", "", 86_027_724L, "dmcount.tflite", "v1.0.0"),
+          Model(name = "MobileNet V2 (fast)", displayName = "Identifies 1,000 everyday objects (~3.9 MB, bundled).", info = "", sizeInBytes = 3_887_792L, downloadFileName = "mobilenet_v2_int8.tflite", version = "v1.0.0"),
+          Model(name = "MobileNet V2 (Tensor G5 NPU)", displayName = "Pixel 10 Tensor G5 NPU build with automatic fallback (~8.4 MB, bundled).", info = "", sizeInBytes = 8_382_816L, downloadFileName = "mobilenet_v2_g5.tflite", version = "v1.0.0"),
+          Model(name = "MobileNet V3 Large", displayName = "Higher accuracy across 1,000 ImageNet classes (~5.8 MB, bundled).", info = "", sizeInBytes = 5_808_416L, downloadFileName = "mobilenet_v3_large_dynamic_wi8_afp32.tflite", version = "v1.0.0"),
+          Model(name = "MobileNet V3 Large (Tensor G5 NPU)", displayName = "Higher-accuracy Tensor G5 NPU build (~13.6 MB, bundled).", info = "", sizeInBytes = 13_619_632L, downloadFileName = "mobilenet_v3_large_Google_Tensor_G5_apply_plugin.tflite", version = "v1.0.0"),
+          Model(name = "PlantNet-300K ResNet18", displayName = "Identifies 1,081 plant species with botanical names (~47 MB, bundled).", info = "", sizeInBytes = 46_942_600L, downloadFileName = "plantnet.tflite", version = "v1.0.0"),
+          Model(name = "DM-Count Crowd", displayName = "Estimates crowd headcount in photos (~86 MB, bundled).", info = "", sizeInBytes = 86_027_724L, downloadFileName = "dmcount.tflite", version = "v1.0.0"),
         ),
       description =
         "Identify what's in a photo on-device: 1000 ImageNet objects (MobileNet V2/V3), 1081 plant species (PlantNet-300K), or a crowd headcount (DM-Count). Fully offline.",

@@ -352,7 +352,9 @@ constructor(@ApplicationContext private val context: Context) : ViewModel() {
 
   override fun onCleared() {
     super.onCleared()
-    clientsByUrl.values.forEach { runCatching { it.close() } }
+    kotlinx.coroutines.runBlocking {
+      clientsByUrl.values.forEach { runCatching { it.close() } }
+    }
     clientsByUrl.clear()
     runCatching { httpClient.close() }
   }

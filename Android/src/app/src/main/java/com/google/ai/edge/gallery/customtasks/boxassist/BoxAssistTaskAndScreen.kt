@@ -75,6 +75,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -400,8 +401,6 @@ class BoxAssistTask @Inject constructor() : CustomTask {
         "Live mode calls out objects and proximity; Read Text mode reads mail, labels and menus aloud; " +
         "Describe mode answers questions about what the camera sees.",
     shortDescription = "Spoken camera assistance",
-    showRunAgainButton = false,
-    showBenchmarkButton = false,
   )
 
   override fun initializeModelFn(
@@ -602,7 +601,7 @@ private fun BoxAssistScreen(
         vlm.runtimeHelper.runInference(
           model = vlm,
           input = prompt,
-          resultListener = { partial, done ->
+          resultListener = { partial, done, _ ->
             sb.append(partial)
             val full = sb.toString()
             lastSpokenText = full
