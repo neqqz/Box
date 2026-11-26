@@ -75,7 +75,6 @@
         android:label="Box"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:extractNativeLibs="true"
         android:theme="@style/Theme.Gallery"
         android:localeConfig="@xml/locales_config"
         android:memtagMode="async"
