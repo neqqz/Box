@@ -117,16 +117,8 @@ object LlmChatModelHelper : LlmModelHelper {
       )
 
     // Create an instance of LiteRT LM engine and conversation.
-    val hasSpeculativeDecodingSupport =
-      try {
-        com.google.ai.edge.litertlm.Capabilities(modelPath).use {
-          it.hasSpeculativeDecodingSupport()
-        }
-      } catch (_: Exception) {
-        false
-      }
     val enableSpeculativeDecoding =
-      hasSpeculativeDecodingSupport &&
+      model.llmSupportSpeculativeDecoding &&
         preferredBackend !is Backend.NPU &&
         model.getBooleanConfigValue(
           key = ConfigKeys.ENABLE_SPECULATIVE_DECODING,
