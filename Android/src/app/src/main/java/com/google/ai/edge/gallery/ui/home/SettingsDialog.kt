@@ -82,6 +82,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -954,24 +955,19 @@ private fun SettingsAccordionSection(
   onToggle: () -> Unit,
   content: @Composable () -> Unit,
 ) {
-  Column(
-    modifier = Modifier
-      .fillMaxWidth()
-      .border(
-        width = 1.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(12.dp),
-      )
-      .padding(horizontal = 12.dp, vertical = 10.dp)
-  ) {
+  Column(modifier = Modifier.fillMaxWidth()) {
     Row(
-      modifier = Modifier.fillMaxWidth().clickable { onToggle() },
+      modifier = Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(12.dp))
+        .clickable { onToggle() }
+        .padding(vertical = 10.dp),
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Text(
         title,
-        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
       )
       Icon(
         if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
@@ -979,7 +975,7 @@ private fun SettingsAccordionSection(
       )
     }
     AnimatedVisibility(visible = expanded) {
-      Column(modifier = Modifier.padding(top = 10.dp)) {
+      Column(modifier = Modifier.padding(top = 6.dp, bottom = 8.dp)) {
         content()
       }
     }

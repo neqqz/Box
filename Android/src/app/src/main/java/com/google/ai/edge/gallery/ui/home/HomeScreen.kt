@@ -994,7 +994,6 @@ private fun TaskCard(
         modifier = Modifier.fillMaxSize().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
       ) {
-        TaskIcon(task = task, width = 40.dp)
         Column() {
           Text(
             curModelCountLabel,

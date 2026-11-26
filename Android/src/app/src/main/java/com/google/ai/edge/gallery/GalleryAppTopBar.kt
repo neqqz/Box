@@ -111,7 +111,7 @@ fun GalleryTopAppBar(
         AppBarActionType.MENU -> {
           IconButton(onClick = leftAction.actionFn) {
             Icon(
-              imageVector = Icons.Rounded.Menu,
+              painter = painterResource(R.drawable.ic_box),
               contentDescription = stringResource(R.string.cd_menu),
             )
           }
