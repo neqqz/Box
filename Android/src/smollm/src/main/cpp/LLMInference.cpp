@@ -1,4 +1,5 @@
 #include "LLMInference.h"
+#include "ggml-backend.h"
 #include <android/log.h>
 #include <cstring>
 #include <iomanip>
@@ -14,7 +15,8 @@
 void
 LLMInference::loadModel(const char *model_path, float minP, float temperature, float topP, int topK,
                         float repeatPenalty, bool storeChats, long contextSize,
-                        const char *chatTemplate, int nThreads, bool useMmap, bool useMlock) {
+                        const char *chatTemplate, int nThreads, bool useMmap, bool useMlock,
+                        int nGpuLayers, int nThreadsBatch, bool kvCacheQ8) {
     LOGi("loading model with"
          "\n\tmodel_path = %s"
          "\n\tminP = %f"
@@ -26,16 +28,27 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
          "\n\tcontextSize = %li"
          "\n\tnThreads = %d"
          "\n\tuseMmap = %d"
-         "\n\tuseMlock = %d",
+         "\n\tuseMlock = %d"
+         "\n\tnGpuLayers = %d"
+         "\n\tnThreadsBatch = %d"
+         "\n\tkvCacheQ8 = %d",
          model_path, minP, temperature, topP, topK, repeatPenalty, storeChats, contextSize,
-         nThreads, useMmap, useMlock);
+         nThreads, useMmap, useMlock, nGpuLayers, nThreadsBatch, kvCacheQ8);
 
-    ggml_backend_load_all();
+    if (ggml_backend_reg_count() == 0) {
+        ggml_backend_load_all();
+    }
 
     llama_model_params model_params = llama_model_default_params();
     model_params.use_mmap = useMmap;
     model_params.use_mlock = useMlock;
+    model_params.n_gpu_layers = nGpuLayers;
     _model = llama_model_load_from_file(model_path, model_params);
+    if (!_model && nGpuLayers > 0) {
+        LOGe("GPU load failed, retrying on CPU");
+        model_params.n_gpu_layers = 0;
+        _model = llama_model_load_from_file(model_path, model_params);
+    }
     if (!_model) {
         LOGe("failed to load model from %s", model_path);
         throw std::runtime_error("loadModel() failed");
@@ -45,6 +58,11 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
     ctx_params.n_ctx = contextSize;
     ctx_params.n_batch = contextSize;
     ctx_params.n_threads = nThreads;
+    ctx_params.n_threads_batch = (nThreadsBatch > 0) ? nThreadsBatch : nThreads;
+    if (kvCacheQ8) {
+        ctx_params.type_k = GGML_TYPE_Q8_0;
+        ctx_params.type_v = GGML_TYPE_Q8_0;
+    }
     ctx_params.no_perf = true;
     _ctx = llama_init_from_model(_model, ctx_params);
     if (!_ctx) {
@@ -105,6 +123,48 @@ LLMInference::addChatMessage(const char *message, const char *role) {
         actualRole = _assistantRole.c_str();
     }
     _messages.push_back({strdup(actualRole), strdup(message)});
+}
+
+void
+LLMInference::prewarmHistory() {
+    if (!_ctx || !_model || _messages.empty()) return;
+
+    int new_len = llama_chat_apply_template(
+        _chatTemplate,
+        _messages.data(),
+        _messages.size(),
+        false,
+        _formattedMessages.data(),
+        _formattedMessages.size()
+    );
+    if (new_len > (int)_formattedMessages.size()) {
+        _formattedMessages.resize(new_len);
+        new_len = llama_chat_apply_template(
+            _chatTemplate,
+            _messages.data(),
+            _messages.size(),
+            false,
+            _formattedMessages.data(),
+            _formattedMessages.size()
+        );
+    }
+    if (new_len <= 0) return;
+
+    std::string prompt(_formattedMessages.begin(), _formattedMessages.begin() + new_len);
+    std::vector<llama_token> tokens = common_tokenize(llama_model_get_vocab(_model), prompt, true, true);
+    if (tokens.empty()) return;
+    if (tokens.size() >= llama_n_ctx(_ctx)) {
+        LOGi("prewarmHistory: history would exceed context; leaving prefill to first send");
+        return;
+    }
+
+    llama_memory_clear(llama_get_memory(_ctx), false);
+    llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
+    if (llama_decode(_ctx, batch) != 0) {
+        LOGi("prewarmHistory: decode failed (non-fatal; first send will prefill)");
+    } else {
+        LOGi("prewarmHistory: prefilled %zu history tokens at load", tokens.size());
+    }
 }
 
 float

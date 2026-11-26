@@ -3,9 +3,12 @@ package com.google.ai.edge.gallery.security
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.PersistableBundle
 import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import java.io.File
 import java.security.SecureRandom
 
@@ -115,27 +118,51 @@ object SecurityUtils {
         return getOrCreatePlainPassphrase(context)
     }
 
+    private fun getEncryptedPrefs(context: Context): SharedPreferences {
+        val appContext = context.applicationContext
+        val masterKey = MasterKey.Builder(appContext)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return EncryptedSharedPreferences.create(
+            appContext,
+            "box_security_enc",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }
+
     fun getOrCreatePlainPassphrase(context: Context): ByteArray {
-        val prefs = context.getSharedPreferences("box_security", Context.MODE_PRIVATE)
-        val existing = prefs.getString("db_key", null)
+        val encPrefs = getEncryptedPrefs(context)
+        val existing = encPrefs.getString("db_key", null)
         if (existing != null) {
             return android.util.Base64.decode(existing, android.util.Base64.NO_WRAP)
         }
+        val legacyPrefs = context.getSharedPreferences("box_security", Context.MODE_PRIVATE)
+        val legacy = legacyPrefs.getString("db_key", null)
+        if (legacy != null) {
+            encPrefs.edit().putString("db_key", legacy).apply()
+            legacyPrefs.edit().remove("db_key").apply()
+            return android.util.Base64.decode(legacy, android.util.Base64.NO_WRAP)
+        }
         val passphrase = ByteArray(32)
         SecureRandom().nextBytes(passphrase)
-        prefs.edit()
+        encPrefs.edit()
             .putString("db_key", android.util.Base64.encodeToString(passphrase, android.util.Base64.NO_WRAP))
             .apply()
         return passphrase
     }
 
     fun storePlainPassphrase(context: Context, passphrase: ByteArray) {
-        context.getSharedPreferences("box_security", Context.MODE_PRIVATE).edit()
+        getEncryptedPrefs(context).edit()
             .putString("db_key", android.util.Base64.encodeToString(passphrase, android.util.Base64.NO_WRAP))
             .apply()
     }
 
     fun clearPlainPassphrase(context: Context) {
+        getEncryptedPrefs(context).edit()
+            .remove("db_key")
+            .apply()
         context.getSharedPreferences("box_security", Context.MODE_PRIVATE).edit()
             .remove("db_key")
             .apply()

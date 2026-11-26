@@ -76,6 +76,9 @@ import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.common.AskInfoAgentAction
 import com.google.ai.edge.gallery.common.CallJsAgentAction
 import com.google.ai.edge.gallery.common.SkillProgressAgentAction
+import com.google.ai.edge.gallery.customtasks.mcp.McpManagerBottomSheet
+import com.google.ai.edge.gallery.customtasks.mcp.McpManagerViewModel
+import com.google.ai.edge.gallery.customtasks.mcp.McpToolSet
 import com.google.ai.edge.gallery.data.BuiltInTaskId
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.Task
@@ -115,16 +118,21 @@ fun AgentChatScreen(
   modelManagerViewModel: ModelManagerViewModel,
   navigateUp: () -> Unit,
   agentTools: AgentTools,
+  mcpToolSet: McpToolSet = McpToolSet(),
   viewModel: LlmChatViewModel = hiltViewModel(),
   skillManagerViewModel: SkillManagerViewModel = hiltViewModel(),
+  mcpManagerViewModel: McpManagerViewModel = hiltViewModel(),
 ) {
   val context = LocalContext.current
   agentTools.context = context
   agentTools.skillManagerViewModel = skillManagerViewModel
+  mcpToolSet.agentTools = agentTools
+  mcpToolSet.mcpManagerViewModel = mcpManagerViewModel
   val density = LocalDensity.current
   val windowInfo = LocalWindowInfo.current
   val screenWidthDp = remember { with(density) { windowInfo.containerSize.width.toDp() } }
   var showSkillManagerBottomSheet by remember { mutableStateOf(false) }
+  var showMcpManagerBottomSheet by remember { mutableStateOf(false) }
   var showAskInfoDialog by remember { mutableStateOf(false) }
   var currentAskInfoAction by remember { mutableStateOf<AskInfoAgentAction?>(null) }
   var askInfoInputValue by remember { mutableStateOf("") }
@@ -193,9 +201,11 @@ fun AgentChatScreen(
         viewModel,
         modelManagerViewModel,
         skillManagerViewModel,
+        mcpManagerViewModel,
         task,
         curSystemPrompt,
         agentTools,
+        mcpToolSet,
       )
     },
     onSkillClicked = { showSkillManagerBottomSheet = true },
@@ -332,9 +342,11 @@ fun AgentChatScreen(
         viewModel,
         modelManagerViewModel,
         skillManagerViewModel,
+        mcpManagerViewModel,
         task,
         curSystemPrompt,
         agentTools,
+        mcpToolSet,
         onDone = { model ->
           viewModel.addMessage(
             model = model,
@@ -464,6 +476,11 @@ fun AgentChatScreen(
     SkillManagerBottomSheet(
       agentTools = agentTools,
       skillManagerViewModel = skillManagerViewModel,
+      mcpManagerViewModel = mcpManagerViewModel,
+      onOpenMcpManager = {
+        showSkillManagerBottomSheet = false
+        showMcpManagerBottomSheet = true
+      },
       onDismiss = { selectedSkillsChanged ->
         // Hide sheet.
         showSkillManagerBottomSheet = false
@@ -475,9 +492,33 @@ fun AgentChatScreen(
             viewModel,
             modelManagerViewModel,
             skillManagerViewModel,
+            mcpManagerViewModel,
             task,
             curSystemPrompt,
             agentTools,
+            mcpToolSet,
+          )
+        }
+      },
+    )
+  }
+
+  if (showMcpManagerBottomSheet) {
+    McpManagerBottomSheet(
+      mcpManagerViewModel = mcpManagerViewModel,
+      onDismiss = { toolsChanged ->
+        showMcpManagerBottomSheet = false
+        if (toolsChanged) {
+          Log.d(TAG, "MCP tools changed. Resetting conversation.")
+          resetSessionWithCurrentSkills(
+            viewModel,
+            modelManagerViewModel,
+            skillManagerViewModel,
+            mcpManagerViewModel,
+            task,
+            curSystemPrompt,
+            agentTools,
+            mcpToolSet,
           )
         }
       },
@@ -538,20 +579,37 @@ private fun resetSessionWithCurrentSkills(
   viewModel: LlmChatViewModel,
   modelManagerViewModel: ModelManagerViewModel,
   skillManagerViewModel: SkillManagerViewModel,
+  mcpManagerViewModel: McpManagerViewModel,
   task: Task,
   curSystemPrompt: String,
   agentTools: AgentTools,
+  mcpToolSet: McpToolSet,
   onDone: (Model) -> Unit = {},
 ) {
   val model = modelManagerViewModel.uiState.value.selectedModel
   val newSelectedSkills = skillManagerViewModel.getSelectedSkills()
+  val mcpPrompt = mcpManagerViewModel.getToolsPromptSection()
+  val hasMcp = mcpPrompt.isNotEmpty()
+  val systemInstruction =
+    when {
+      newSelectedSkills.isEmpty() && !hasMcp -> null
+      hasMcp -> {
+        val skillsText = skillManagerViewModel.getSelectedSkillsNamesAndDescriptions()
+        com.google.ai.edge.litertlm.Contents.of(
+          PROMPT_WITH_MCP_TOOLS.trimIndent()
+            .replace("___SKILLS___", skillsText)
+            .replace("___TOOLS___", mcpPrompt)
+        )
+      }
+      else -> skillManagerViewModel.getSystemPrompt(curSystemPrompt)
+    }
+  val activeTools =
+    if (hasMcp) listOf(tool(agentTools), tool(mcpToolSet)) else listOf(tool(agentTools))
   viewModel.resetSession(
     task = task,
     model = model,
-    systemInstruction =
-      if (newSelectedSkills.isEmpty()) null
-      else skillManagerViewModel.getSystemPrompt(curSystemPrompt),
-    tools = listOf(tool(agentTools)),
+    systemInstruction = systemInstruction,
+    tools = activeTools,
     supportImage = true,
     supportAudio = true,
     onDone = { onDone(model) },

@@ -18,6 +18,9 @@ package com.box.gallery
 
 import android.animation.ObjectAnimator
 import android.content.Intent
+import android.content.pm.ShortcutInfo
+import android.content.pm.ShortcutManager
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -109,6 +112,7 @@ class MainActivity : FragmentActivity() {
     }
 
     SecurityAuditLog.log(this, "APP_LAUNCHED")
+    registerDynamicShortcuts()
 
     // Debug: Dump all intent extras to see what FCM unloads
     intent.extras?.let { extras ->
@@ -168,6 +172,7 @@ class MainActivity : FragmentActivity() {
     }
     // Keep the screen on while the app is running for a better demo experience.
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    window.setSustainedPerformanceMode(true)
   }
 
   override fun onNewIntent(intent: Intent) {
@@ -215,6 +220,35 @@ class MainActivity : FragmentActivity() {
       )
     }
 
+  }
+
+  private fun registerDynamicShortcuts() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return
+    val sm = getSystemService(ShortcutManager::class.java) ?: return
+    if (sm.isRateLimitingActive) return
+    val chatShortcut =
+      ShortcutInfo.Builder(this, "shortcut_ai_chat")
+        .setShortLabel("Chat")
+        .setLongLabel("Open Chat")
+        .setIcon(Icon.createWithResource(this, com.google.ai.edge.gallery.R.drawable.ic_shortcut_chat))
+        .setIntent(
+          Intent(Intent.ACTION_VIEW, "com.box.gallery://shortcut/llm_chat".toUri())
+            .setClass(this, MainActivity::class.java)
+        )
+        .setRank(0)
+        .build()
+    val assistShortcut =
+      ShortcutInfo.Builder(this, "shortcut_box_assist")
+        .setShortLabel("Box Assist")
+        .setLongLabel("Open Box Assist")
+        .setIcon(Icon.createWithResource(this, com.google.ai.edge.gallery.R.drawable.ic_shortcut_assist))
+        .setIntent(
+          Intent(Intent.ACTION_VIEW, "com.box.gallery://shortcut/box_assist".toUri())
+            .setClass(this, MainActivity::class.java)
+        )
+        .setRank(1)
+        .build()
+    runCatching { sm.dynamicShortcuts = listOf(chatShortcut, assistShortcut) }
   }
 
   companion object {

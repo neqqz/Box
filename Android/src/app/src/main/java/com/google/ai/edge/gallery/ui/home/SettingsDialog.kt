@@ -16,22 +16,28 @@
 
 package com.google.ai.edge.gallery.ui.home
 
-import com.google.android.gms.oss.licenses.OssLicensesMenuActivity
+import android.app.LocaleManager
 import android.app.UiModeManager
 import android.content.Context
-import android.content.Intent
+import android.os.Build
+import android.os.LocaleList
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,24 +47,34 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.MultiChoiceSegmentedButtonRow
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -87,6 +103,13 @@ import com.google.ai.edge.gallery.security.SecurityUtils
 import com.google.ai.edge.gallery.ui.common.ClickableLink
 import com.google.ai.edge.gallery.ui.common.tos.AppTosDialog
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
+import com.google.ai.edge.gallery.ui.theme.AppFont
+import com.google.ai.edge.gallery.ui.theme.CatppuccinAccent
+import com.google.ai.edge.gallery.ui.theme.CatppuccinFlavor
+import com.google.ai.edge.gallery.ui.theme.CustomThemeType
+import com.google.ai.edge.gallery.ui.theme.DraculaAccent
+import com.google.ai.edge.gallery.ui.theme.PtyxisExtendedPalette
+import com.google.ai.edge.gallery.ui.theme.PtyxisPalette
 import com.google.ai.edge.gallery.ui.theme.ThemeSettings
 import com.google.ai.edge.gallery.ui.theme.labelSmallNarrow
 import java.time.Instant
@@ -94,10 +117,84 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 private val THEME_OPTIONS = listOf(Theme.THEME_AUTO, Theme.THEME_LIGHT, Theme.THEME_DARK)
 
-@OptIn(ExperimentalMaterial3Api::class)
+// Language options matching APK: 7 locales + system default
+private data class AppLanguage(val tag: String, val displayName: String)
+
+private val APP_LANGUAGES = listOf(
+  AppLanguage("", "System default"),
+  AppLanguage("en", "English"),
+  AppLanguage("fr", "Français"),
+  AppLanguage("pt", "Português"),
+  AppLanguage("pt-BR", "Português (Brasil)"),
+  AppLanguage("de", "Deutsch"),
+  AppLanguage("zh-CN", "中文 (简体)"),
+)
+
+// GGUF engine setting keys and labels (from decompiled APK)
+private data class GgufSetting(
+  val key: String,
+  val label: String,
+  val description: String,
+  val type: GgufSettingType,
+  val options: List<String>? = null,
+  val defaultValue: String = "",
+)
+
+private enum class GgufSettingType { DROPDOWN, SWITCH }
+
+private val GGUF_SETTINGS = listOf(
+  GgufSetting(
+    key = "context_size",
+    label = "Context size",
+    description = "Maximum number of tokens for context window",
+    type = GgufSettingType.DROPDOWN,
+    options = listOf("512", "1024", "2048", "4096", "8192"),
+    defaultValue = "2048",
+  ),
+  GgufSetting(
+    key = "cpu_threads",
+    label = "CPU threads",
+    description = "Number of CPU threads for inference",
+    type = GgufSettingType.DROPDOWN,
+    options = listOf("1", "2", "4", "6", "8"),
+    defaultValue = "4",
+  ),
+  GgufSetting(
+    key = "gpu_layers",
+    label = "GPU offload layers",
+    description = "Number of layers to offload to GPU (0 = CPU only)",
+    type = GgufSettingType.DROPDOWN,
+    options = listOf("0", "8", "16", "24", "32", "48", "64", "99"),
+    defaultValue = "99",
+  ),
+  GgufSetting(
+    key = "mmap",
+    label = "Memory-mapped loading (mmap)",
+    description = "Use memory-mapped I/O for model loading. Faster startup, more memory usage.",
+    type = GgufSettingType.SWITCH,
+    defaultValue = "true",
+  ),
+  GgufSetting(
+    key = "mlock",
+    label = "Lock model in RAM (mlock)",
+    description = "Prevent model data from being swapped out. May improve latency.",
+    type = GgufSettingType.SWITCH,
+    defaultValue = "false",
+  ),
+  GgufSetting(
+    key = "kv_cache_q8",
+    label = "KV-cache Q8 quantization",
+    description = "Quantize key/value cache to Q8 to save memory at slight quality cost.",
+    type = GgufSettingType.SWITCH,
+    defaultValue = "false",
+  ),
+)
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsDialog(
   curThemeOverride: Theme,
@@ -116,6 +213,7 @@ fun SettingsDialog(
   val focusRequester = remember { FocusRequester() }
   val interactionSource = remember { MutableInteractionSource() }
   var showTos by remember { mutableStateOf(false) }
+  var showLicenses by remember { mutableStateOf(false) }
 
   Dialog(onDismissRequest = onDismissed) {
     val focusManager = LocalFocusManager.current
@@ -123,7 +221,7 @@ fun SettingsDialog(
       modifier =
         Modifier.fillMaxWidth().clickable(
           interactionSource = interactionSource,
-          indication = null, // Disable the ripple effect
+          indication = null,
         ) {
           focusManager.clearFocus()
         },
@@ -140,7 +238,6 @@ fun SettingsDialog(
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(bottom = 8.dp),
           )
-          // Subtitle.
           Text(
             "App version: ${BuildConfig.VERSION_NAME}",
             style = labelSmallNarrow,
@@ -154,7 +251,8 @@ fun SettingsDialog(
           verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
           val context = LocalContext.current
-          // Theme switcher.
+
+          // ---- Theme base switcher (Auto / Light / Dark) ----
           Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
             Text(
               "Theme",
@@ -167,18 +265,8 @@ fun SettingsDialog(
                     SegmentedButtonDefaults.itemShape(index = index, count = THEME_OPTIONS.size),
                   onCheckedChange = {
                     selectedTheme = theme
-
-                    // Update theme settings.
-                    // This will update app's theme.
                     ThemeSettings.themeOverride.value = theme
-
-                    // Save to data store.
                     modelManagerViewModel.saveThemeOverride(theme)
-
-                    // Update ui mode.
-                    //
-                    // This is necessary to make other Activities launched from MainActivity to have
-                    // the correct theme.
                     val uiModeManager =
                       context.applicationContext.getSystemService(Context.UI_MODE_SERVICE)
                         as UiModeManager
@@ -197,7 +285,19 @@ fun SettingsDialog(
             }
           }
 
-          // HF Token management.
+          // ---- Custom Theme Picker ----
+          CustomThemeSection(context)
+
+          // ---- Font Picker ----
+          FontPickerSection(context)
+
+          // ---- Language Switcher ----
+          LanguageSwitcherSection(context)
+
+          // ---- GGUF Settings ----
+          GgufSettingsSection(context)
+
+          // ---- HF Token management ----
           Column(
             modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -206,7 +306,6 @@ fun SettingsDialog(
               "HuggingFace access token",
               style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
             )
-            // Show the start of the token.
             val curHfToken = hfToken
             if (curHfToken != null && curHfToken.accessToken.isNotEmpty()) {
               Text(
@@ -301,7 +400,7 @@ fun SettingsDialog(
             }
           }
 
-          // Box: Biometric lock toggle
+          // ---- Biometric lock toggle ----
           val dbEncEnabled by BiometricEncryptionManager.isEnabledFlow.collectAsState()
           Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
             Text(
@@ -337,7 +436,7 @@ fun SettingsDialog(
             }
           }
 
-          // Box: Allow screenshots toggle
+          // ---- Allow screenshots toggle ----
           Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
             Text(
               "Allow screenshots",
@@ -370,10 +469,10 @@ fun SettingsDialog(
             }
           }
 
-          // Box: Biometric database encryption toggle
+          // ---- Biometric database encryption toggle ----
           BiometricEncryptionSection(context)
 
-          // Box: Offline mode toggle
+          // ---- Offline mode toggle ----
           Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
             Text(
               "Offline mode",
@@ -403,7 +502,7 @@ fun SettingsDialog(
             }
           }
 
-          // Box: Privacy notice
+          // ---- Privacy notice ----
           Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
             Text(
               "Privacy",
@@ -419,25 +518,18 @@ fun SettingsDialog(
             )
           }
 
-          // Third party licenses.
+          // ---- Third party licenses ----
           Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
             Text(
               "Third-party libraries",
               style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
             )
-            OutlinedButton(
-              onClick = {
-                // Create an Intent to launch a license viewer that displays a list of
-                // third-party library names. Clicking a name will show its license content.
-                val intent = Intent(context, OssLicensesMenuActivity::class.java)
-                context.startActivity(intent)
-              }
-            ) {
+            OutlinedButton(onClick = { showLicenses = true }) {
               Text("View licenses")
             }
           }
 
-          // About
+          // ---- About ----
           Column(
             modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -452,7 +544,7 @@ fun SettingsDialog(
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-              "Box fork version: v1.0.1",
+              "Box fork version: ${BuildConfig.VERSION_NAME}",
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -468,13 +560,12 @@ fun SettingsDialog(
             )
           }
 
-          // Privacy & Legal
+          // ---- Privacy & Legal ----
           Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
             Text(
               "Privacy & Legal",
               style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
             )
-            // Removed "View App Terms of Service" button
             ClickableLink(
               url = "https://ai.google.dev/gemma/terms",
               linkText = stringResource(R.string.tos_dialog_title_gemma),
@@ -493,7 +584,6 @@ fun SettingsDialog(
           modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
           horizontalArrangement = Arrangement.End,
         ) {
-          // Close button
           Button(onClick = { onDismissed() }) { Text("Close") }
         }
       }
@@ -503,12 +593,426 @@ fun SettingsDialog(
   if (showTos) {
     AppTosDialog(onTosAccepted = { showTos = false }, viewingMode = true)
   }
+
+  if (showLicenses) {
+    LicensesDialog(onDismiss = { showLicenses = false })
+  }
 }
+
+// ======== Custom Theme Picker ========
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CustomThemeSection(context: Context) {
+  val currentTheme by ThemeSettings.customTheme
+  val currentFlavor by ThemeSettings.catppuccinFlavor
+  val currentCatAccent by ThemeSettings.catppuccinAccent
+  val currentDracAccent by ThemeSettings.draculaAccent
+  val currentPtyxis by ThemeSettings.ptyxisPalette
+  val currentPtyxisExt by ThemeSettings.ptyxisPaletteExtended
+  val currentMono by ThemeSettings.monochromeAccents
+
+  Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+    Text(
+      "Custom theme",
+      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+    )
+    Text(
+      "Override the base theme with a custom color palette.",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+
+    // Theme type chips
+    FlowRow(
+      horizontalArrangement = Arrangement.spacedBy(6.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+      CustomThemeType.entries.forEach { type ->
+        FilterChip(
+          selected = currentTheme == type,
+          onClick = { ThemeSettings.setCustomTheme(context, type) },
+          label = { Text(type.label, style = MaterialTheme.typography.labelMedium) },
+        )
+      }
+    }
+
+    // Catppuccin sub-pickers
+    AnimatedVisibility(visible = currentTheme == CustomThemeType.CATPPUCCIN) {
+      Column(
+        modifier = Modifier.padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        Text("Flavor", style = MaterialTheme.typography.labelMedium)
+        FlowRow(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+          CatppuccinFlavor.entries.forEach { flavor ->
+            FilterChip(
+              selected = currentFlavor == flavor,
+              onClick = { ThemeSettings.setCatppuccinFlavor(context, flavor) },
+              label = { Text(flavor.displayName, style = MaterialTheme.typography.labelSmall) },
+            )
+          }
+        }
+        Text("Accent", style = MaterialTheme.typography.labelMedium)
+        FlowRow(
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+          CatppuccinAccent.entries.forEach { accent ->
+            FilterChip(
+              selected = currentCatAccent == accent,
+              onClick = { ThemeSettings.setCatppuccinAccent(context, accent) },
+              label = { Text(accent.displayName, style = MaterialTheme.typography.labelSmall) },
+            )
+          }
+        }
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text("Monochrome accents", style = MaterialTheme.typography.bodySmall)
+          androidx.compose.material3.Switch(
+            checked = currentMono,
+            onCheckedChange = { ThemeSettings.setMonochromeAccents(context, it) },
+          )
+        }
+      }
+    }
+
+    // Dracula sub-pickers
+    AnimatedVisibility(visible = currentTheme == CustomThemeType.DRACULA) {
+      Column(
+        modifier = Modifier.padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        Text("Accent", style = MaterialTheme.typography.labelMedium)
+        FlowRow(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+          DraculaAccent.entries.forEach { accent ->
+            FilterChip(
+              selected = currentDracAccent == accent,
+              onClick = { ThemeSettings.setDraculaAccent(context, accent) },
+              label = { Text(accent.displayName, style = MaterialTheme.typography.labelSmall) },
+            )
+          }
+        }
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text("Monochrome accents", style = MaterialTheme.typography.bodySmall)
+          androidx.compose.material3.Switch(
+            checked = currentMono,
+            onCheckedChange = { ThemeSettings.setMonochromeAccents(context, it) },
+          )
+        }
+      }
+    }
+
+    // Ptyxis palette picker
+    AnimatedVisibility(visible = currentTheme == CustomThemeType.PTYXIS) {
+      Column(modifier = Modifier.padding(top = 8.dp)) {
+        Text("Terminal palette", style = MaterialTheme.typography.labelMedium)
+        Spacer(modifier = Modifier.height(4.dp))
+        DropdownPicker(
+          label = "Palette",
+          options = PtyxisPalette.entries.map { it.displayName },
+          selected = currentPtyxis.displayName,
+          onSelect = { idx ->
+            ThemeSettings.setPtyxisPalette(context, PtyxisPalette.entries[idx])
+          },
+        )
+      }
+    }
+
+    // Ptyxis+ palette picker
+    AnimatedVisibility(visible = currentTheme == CustomThemeType.PTYXIS_EXTENDED) {
+      Column(modifier = Modifier.padding(top = 8.dp)) {
+        Text("Terminal palette (extended)", style = MaterialTheme.typography.labelMedium)
+        Spacer(modifier = Modifier.height(4.dp))
+        DropdownPicker(
+          label = "Palette",
+          options = PtyxisExtendedPalette.entries.map { it.displayName },
+          selected = currentPtyxisExt.displayName,
+          onSelect = { idx ->
+            ThemeSettings.setPtyxisExtendedPalette(context, PtyxisExtendedPalette.entries[idx])
+          },
+        )
+      }
+    }
+  }
+}
+
+// ======== Font Picker ========
+
+@Composable
+private fun FontPickerSection(context: Context) {
+  val currentAppFont by ThemeSettings.appFont
+  val currentChatFont by ThemeSettings.chatFont
+  val currentQuickActionsFont by ThemeSettings.quickActionsFont
+  val currentCategoryTabsFont by ThemeSettings.categoryTabsFont
+  val currentScale by ThemeSettings.fontScale
+
+  Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+    Text(
+      "Fonts",
+      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+    )
+    Text(
+      "Customize fonts for different UI areas.",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+
+    val fontOptions = AppFont.entries.map { it.displayName }
+    val fontOptionsWithDefault = listOf("Same as app") + fontOptions
+
+    // App font
+    DropdownPicker(
+      label = "App font",
+      options = fontOptions,
+      selected = currentAppFont.displayName,
+      onSelect = { idx -> ThemeSettings.setAppFont(context, AppFont.entries[idx]) },
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+
+    // Chat font
+    DropdownPicker(
+      label = "Chat font",
+      options = fontOptionsWithDefault,
+      selected = currentChatFont?.displayName ?: "Same as app",
+      onSelect = { idx ->
+        ThemeSettings.setChatFont(context, if (idx == 0) null else AppFont.entries[idx - 1])
+      },
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+
+    // Quick actions font
+    DropdownPicker(
+      label = "Quick actions font",
+      options = fontOptionsWithDefault,
+      selected = currentQuickActionsFont?.displayName ?: "Same as app",
+      onSelect = { idx ->
+        ThemeSettings.setQuickActionsFont(context, if (idx == 0) null else AppFont.entries[idx - 1])
+      },
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+
+    // Category tabs font
+    DropdownPicker(
+      label = "Category tabs font",
+      options = fontOptionsWithDefault,
+      selected = currentCategoryTabsFont?.displayName ?: "Same as app",
+      onSelect = { idx ->
+        ThemeSettings.setCategoryTabsFont(context, if (idx == 0) null else AppFont.entries[idx - 1])
+      },
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+
+    // Text size slider
+    var sliderValue by remember { mutableFloatStateOf(currentScale) }
+    Text(
+      "Text size: ${((sliderValue * 100).roundToInt())}%",
+      style = MaterialTheme.typography.bodySmall,
+    )
+    Slider(
+      value = sliderValue,
+      onValueChange = {
+        sliderValue = it
+        ThemeSettings.setFontScale(context, it, persist = false)
+      },
+      onValueChangeFinished = {
+        ThemeSettings.setFontScale(context, sliderValue, persist = true)
+      },
+      valueRange = 0.8f..1.4f,
+      steps = 11,
+    )
+  }
+}
+
+// ======== Language Switcher ========
+
+@Composable
+private fun LanguageSwitcherSection(context: Context) {
+  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+
+  val localeManager = context.getSystemService(LocaleManager::class.java) ?: return
+  val currentLocales = localeManager.applicationLocales
+  val currentTag = if (currentLocales.isEmpty) "" else currentLocales.get(0)?.toLanguageTag() ?: ""
+  val selectedIdx = APP_LANGUAGES.indexOfFirst { it.tag == currentTag }.coerceAtLeast(0)
+
+  Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+    Text(
+      "Language",
+      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+    )
+    Text(
+      "Change the app display language. Requires restart.",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    DropdownPicker(
+      label = "Language",
+      options = APP_LANGUAGES.map { it.displayName },
+      selected = APP_LANGUAGES[selectedIdx].displayName,
+      onSelect = { idx ->
+        val tag = APP_LANGUAGES[idx].tag
+        localeManager.applicationLocales =
+          if (tag.isEmpty()) LocaleList.getEmptyLocaleList()
+          else LocaleList.forLanguageTags(tag)
+      },
+    )
+  }
+}
+
+// ======== GGUF Settings ========
+
+@Composable
+private fun GgufSettingsSection(context: Context) {
+  var expanded by remember { mutableStateOf(false) }
+  val prefs = remember { context.getSharedPreferences(ThemeSettings.PREFS_NAME, Context.MODE_PRIVATE) }
+
+  Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+    Row(
+      modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+      horizontalArrangement = Arrangement.SpaceBetween,
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          "GGUF engine settings",
+          style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+        )
+        Text(
+          "Advanced settings for GGUF model inference.",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      Icon(
+        if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+        contentDescription = if (expanded) "Collapse" else "Expand",
+      )
+    }
+
+    AnimatedVisibility(visible = expanded) {
+      Column(
+        modifier = Modifier.padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+      ) {
+        GGUF_SETTINGS.forEach { setting ->
+          when (setting.type) {
+            GgufSettingType.DROPDOWN -> {
+              val current = prefs.getString(setting.key, setting.defaultValue) ?: setting.defaultValue
+              Column {
+                Text(setting.label, style = MaterialTheme.typography.bodySmall)
+                Text(
+                  setting.description,
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                DropdownPicker(
+                  label = setting.label,
+                  options = setting.options!!,
+                  selected = current,
+                  onSelect = { idx ->
+                    prefs.edit().putString(setting.key, setting.options[idx]).apply()
+                  },
+                )
+              }
+            }
+            GgufSettingType.SWITCH -> {
+              val current = prefs.getBoolean(setting.key, setting.defaultValue == "true")
+              Column {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Column(modifier = Modifier.weight(1f)) {
+                    Text(setting.label, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                      setting.description,
+                      style = MaterialTheme.typography.labelSmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                  }
+                  Spacer(modifier = Modifier.width(8.dp))
+                  var checked by remember(setting.key) { mutableStateOf(current) }
+                  androidx.compose.material3.Switch(
+                    checked = checked,
+                    onCheckedChange = {
+                      checked = it
+                      prefs.edit().putBoolean(setting.key, it).apply()
+                    },
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// ======== Shared Dropdown Picker ========
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DropdownPicker(
+  label: String,
+  options: List<String>,
+  selected: String,
+  onSelect: (Int) -> Unit,
+) {
+  var expanded by remember { mutableStateOf(false) }
+  ExposedDropdownMenuBox(
+    expanded = expanded,
+    onExpandedChange = { expanded = !expanded },
+  ) {
+    OutlinedTextField(
+      value = selected,
+      onValueChange = {},
+      readOnly = true,
+      singleLine = true,
+      label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+      trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+      modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+      textStyle = MaterialTheme.typography.bodySmall,
+    )
+    ExposedDropdownMenu(
+      expanded = expanded,
+      onDismissRequest = { expanded = false },
+    ) {
+      options.forEachIndexed { index, text ->
+        DropdownMenuItem(
+          text = { Text(text, style = MaterialTheme.typography.bodySmall) },
+          onClick = {
+            onSelect(index)
+            expanded = false
+          },
+        )
+      }
+    }
+  }
+}
+
+// ======== Biometric Encryption Section ========
 
 @Composable
 private fun BiometricEncryptionSection(context: Context) {
-    // LocalContext inside a Compose Dialog is a ContextThemeWrapper, not FragmentActivity directly.
-    // Unwrap the chain to find the real activity.
     val activity = remember(context) {
         var ctx: android.content.Context = context
         while (ctx is android.content.ContextWrapper && ctx !is FragmentActivity) {
@@ -601,7 +1105,6 @@ private fun BiometricEncryptionSection(context: Context) {
                             PassphraseHolder.set(plain)
                             isEnabled = true
                             hardwareLevel = BiometricEncryptionManager.getHardwareLevel()
-                            // Biometric lock is redundant when DB encryption is active — disable it.
                             com.google.ai.edge.gallery.security.AppLockManager.setBiometricLockEnabled(context, false)
                         },
                         onFailure = { _, _ -> statusText = "Authentication failed" },

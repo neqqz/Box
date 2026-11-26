@@ -151,6 +151,12 @@ object BiometricEncryptionManager {
         onFailure: (Int, CharSequence?) -> Unit,
         onError: (Int, CharSequence) -> Unit,
     ) {
+        val biometricStatus = BiometricManager.from(activity)
+            .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        if (biometricStatus != BiometricManager.BIOMETRIC_SUCCESS) {
+            onError(-1, "Strong biometric authentication unavailable")
+            return
+        }
         val executor = ContextCompat.getMainExecutor(activity)
         val callback = object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {

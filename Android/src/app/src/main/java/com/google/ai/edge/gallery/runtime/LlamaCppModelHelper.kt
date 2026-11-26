@@ -3,6 +3,7 @@ package com.google.ai.edge.gallery.runtime
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.google.ai.edge.gallery.data.Accelerator
 import com.google.ai.edge.gallery.data.ConfigKeys
 import com.google.ai.edge.gallery.data.DEFAULT_TEMPERATURE
 import com.google.ai.edge.gallery.data.DEFAULT_TOPK
@@ -41,18 +42,43 @@ object LlamaCppModelHelper : LlmModelHelper {
         val temperature = model.getFloatConfigValue(
             key = ConfigKeys.TEMPERATURE, defaultValue = DEFAULT_TEMPERATURE
         )
+        val accelerator = model.getStringConfigValue(
+            key = ConfigKeys.ACCELERATOR, defaultValue = Accelerator.CPU.label
+        )
+        val prefs = context.getSharedPreferences("box_settings", Context.MODE_PRIVATE)
+        val nGpuLayers = if (accelerator == Accelerator.GPU.label) {
+            prefs.getInt("llama_gpu_layers", 99)
+        } else {
+            0
+        }
 
         val modelPath = model.getPath(context = context)
-        Log.d(TAG, "Initializing llama.cpp engine for: $modelPath")
+        Log.d(TAG, "Initializing llama.cpp engine for: $modelPath (nGpuLayers=$nGpuLayers)")
 
         val engine = LlamaCppEngine()
         engines[model.name] = engine
+        engine.loadBackends(context.applicationInfo.nativeLibraryDir ?: "")
+
+        val availableProcessors = Runtime.getRuntime().availableProcessors()
+        val configuredThreads = prefs.getInt("llama_num_threads", 0)
+        val numThreads = if (configuredThreads <= 0) {
+            (availableProcessors / 2).coerceIn(4, 8)
+        } else {
+            configuredThreads.coerceAtMost(availableProcessors)
+        }
+        val configuredCtx = prefs.getInt("llama_context_size", 0)
 
         val params = SmolLM.InferenceParams(
             temperature = temperature,
             topP = topP,
             topK = topK,
-            numThreads = Runtime.getRuntime().availableProcessors().coerceAtMost(8),
+            contextSize = if (configuredCtx > 0) configuredCtx.toLong() else null,
+            numThreads = numThreads,
+            useMmap = prefs.getBoolean("llama_use_mmap", false),
+            useMlock = prefs.getBoolean("llama_use_mlock", false),
+            nGpuLayers = nGpuLayers,
+            numThreadsBatch = availableProcessors,
+            kvCacheQ8 = prefs.getBoolean("llama_kv_cache_q8", false),
         )
 
         engine.loadModel(
@@ -150,5 +176,29 @@ object LlamaCppModelHelper : LlmModelHelper {
                 onError(e.message ?: "Inference error")
             }
         )
+    }
+
+    /**
+     * Replay prior conversation turns into the loaded llama.cpp context and prewarm KV cache.
+     */
+    fun loadHistory(model: Model, history: List<Pair<Boolean, String>>) {
+        if (history.isEmpty()) return
+        val engine = engines[model.name] ?: return
+        if (!engine.isModelLoaded.get()) return
+
+        val maxTokens = model.getIntConfigValue(key = ConfigKeys.MAX_TOKENS, defaultValue = 1024)
+        val budget = (maxTokens * 0.7).toInt()
+        val trimmed = history.toMutableList()
+        while (trimmed.isNotEmpty()) {
+            val estimatedTokens = trimmed.sumOf { (_, text) -> (text.length / 4) + 6 }
+            if (estimatedTokens <= budget) break
+            trimmed.removeAt(0)
+        }
+        if (trimmed.isEmpty()) return
+
+        for ((isUser, content) in trimmed) {
+            engine.addHistoryMessage(if (isUser) "user" else "assistant", content)
+        }
+        engine.prewarmHistoryAsync()
     }
 }

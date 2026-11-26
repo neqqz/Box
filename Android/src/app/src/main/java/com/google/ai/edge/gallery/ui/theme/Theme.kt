@@ -33,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.graphics.luminance
 import androidx.core.view.WindowCompat
 import com.google.ai.edge.gallery.proto.Theme
 
@@ -318,49 +319,83 @@ fun StatusBarColorController(useDarkTheme: Boolean) {
 
 @Composable
 fun GalleryTheme(content: @Composable () -> Unit) {
-  val themeOverride = ThemeSettings.themeOverride
-  val darkTheme: Boolean =
-    (isSystemInDarkTheme() || themeOverride.value == Theme.THEME_DARK) &&
-      themeOverride.value != Theme.THEME_LIGHT
-  val view = LocalView.current
+  val themeOverride = ThemeSettings.themeOverride.value
+  val customTheme = ThemeSettings.customTheme.value
+  val catppuccinFlavor = ThemeSettings.catppuccinFlavor.value
+  val catppuccinAccent = ThemeSettings.catppuccinAccent.value
+  val draculaAccent = ThemeSettings.draculaAccent.value
+  val ptyxisPalette = ThemeSettings.ptyxisPalette.value
+  val ptyxisExtendedPalette = ThemeSettings.ptyxisPaletteExtended.value
+  val monochrome = ThemeSettings.monochromeAccents.value
 
+  val baseDark =
+    (isSystemInDarkTheme() || themeOverride == Theme.THEME_DARK) &&
+      themeOverride != Theme.THEME_LIGHT
+
+  val darkTheme: Boolean = when (customTheme) {
+    CustomThemeType.SYSTEM -> baseDark
+    CustomThemeType.LIGHT -> false
+    CustomThemeType.CATPPUCCIN -> catppuccinFlavor != CatppuccinFlavor.LATTE
+    CustomThemeType.DRACULA -> true
+    CustomThemeType.PTYXIS -> true
+    CustomThemeType.PTYXIS_EXTENDED -> ptyxisExtendedPalette.bg.luminance() <= 0.5f
+  }
+
+  val view = LocalView.current
   StatusBarColorController(useDarkTheme = darkTheme)
 
-  // Box: Use Material 3 You dynamic colors extracted from wallpaper.
-  // minSdk 35 guarantees dynamic color is always available.
   val context = view.context
-  val colorScheme = when {
-    darkTheme -> androidx.compose.material3.dynamicDarkColorScheme(context)
-    else -> androidx.compose.material3.dynamicLightColorScheme(context)
+  val colorScheme = when (customTheme) {
+    CustomThemeType.SYSTEM ->
+      if (darkTheme) androidx.compose.material3.dynamicDarkColorScheme(context)
+      else androidx.compose.material3.dynamicLightColorScheme(context)
+    CustomThemeType.LIGHT -> boxLightColorScheme
+    CustomThemeType.CATPPUCCIN ->
+      catppuccinColorScheme(catppuccinFlavor, catppuccinAccent, monochrome)
+    CustomThemeType.DRACULA ->
+      draculaColorScheme(darkTheme, draculaAccent, monochrome)
+    CustomThemeType.PTYXIS ->
+      ptyxisColorScheme(ptyxisPalette, monochrome)
+    CustomThemeType.PTYXIS_EXTENDED ->
+      ptyxisExtendedColorScheme(ptyxisExtendedPalette)
   }
 
-  // Derive custom colors from the dynamic scheme for backward compatibility
-  val customColorsPalette = if (darkTheme) {
-    darkCustomColors.copy(
-      userBubbleBgColor = colorScheme.primaryContainer,
-      agentBubbleBgColor = colorScheme.surfaceContainerHigh,
-      linkColor = colorScheme.primary,
-      tabHeaderBgColor = colorScheme.primary,
-      taskCardBgColor = colorScheme.surfaceContainerHigh,
-    )
-  } else {
-    lightCustomColors.copy(
-      userBubbleBgColor = colorScheme.primaryContainer,
-      agentBubbleBgColor = colorScheme.surfaceContainerHigh,
-      linkColor = colorScheme.primary,
-      tabHeaderBgColor = colorScheme.primary,
-      taskCardBgColor = colorScheme.surfaceContainerLowest,
-    )
-  }
+  val baseCustom = if (darkTheme) darkCustomColors else lightCustomColors
+  val customColorsPalette = baseCustom.copy(
+    appTitleGradientColors = listOf(
+      colorScheme.primary,
+      colorScheme.secondary,
+      colorScheme.tertiary,
+      colorScheme.primary,
+    ),
+    tabHeaderBgColor = colorScheme.primary,
+    taskCardBgColor = if (darkTheme) colorScheme.surfaceContainerHigh else colorScheme.surfaceContainerLowest,
+    taskIconShapeBgColor = colorScheme.primaryContainer,
+    userBubbleBgColor = colorScheme.primaryContainer,
+    agentBubbleBgColor = if (customTheme == CustomThemeType.SYSTEM || customTheme == CustomThemeType.LIGHT) {
+      colorScheme.surfaceContainerHigh
+    } else {
+      colorScheme.secondaryContainer
+    },
+    linkColor = if (customTheme == CustomThemeType.SYSTEM || customTheme == CustomThemeType.LIGHT) {
+      colorScheme.primary
+    } else {
+      colorScheme.outline
+    },
+    successColor = colorScheme.tertiary,
+  )
 
+  val typography = typographyFor(
+    ThemeSettings.appFont.value.fontFamily,
+    ThemeSettings.fontScale.floatValue,
+  )
   CompositionLocalProvider(LocalCustomColors provides customColorsPalette) {
-    MaterialTheme(colorScheme = colorScheme, typography = AppTypography, content = content)
+    MaterialTheme(colorScheme = colorScheme, typography = typography, content = content)
   }
 
   // Make sure the navigation bar stays transparent on manual theme changes.
   LaunchedEffect(darkTheme) {
-    val window = (view.context as Activity).window
-
+    val window = (view.context as? Activity)?.window ?: return@LaunchedEffect
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       window.isNavigationBarContrastEnforced = false
     }

@@ -30,6 +30,32 @@ class LlamaCppEngine {
         private set
     var lastSystemPrompt: String = ""
         private set
+    private var lastNativeLibDir: String = ""
+
+    fun loadBackends(nativeLibDir: String) {
+        lastNativeLibDir = nativeLibDir
+        instance.loadBackends(nativeLibDir)
+    }
+
+    fun getGpuDeviceInfo(): String = instance.getGpuDeviceInfo()
+
+    fun addHistoryMessage(role: String, content: String) {
+        if (isModelLoaded.get()) {
+            instance.addChatMessage(role, content)
+        }
+    }
+
+    fun prewarmHistoryAsync() {
+        if (!isModelLoaded.get()) return
+        CoroutineScope(Dispatchers.Default).launch {
+            try {
+                instance.prewarmHistory()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            }
+        }
+    }
 
     @Volatile
     private var generationJob: Job? = null
@@ -127,6 +153,9 @@ class LlamaCppEngine {
                     // but the OS keeps model pages in memory so reload is fast
                     instance.close()
                     instance = SmolLM()
+                    if (lastNativeLibDir.isNotEmpty()) {
+                        instance.loadBackends(lastNativeLibDir)
+                    }
                     instance.load(modelPath, params)
 
                     if (systemPrompt.isNotBlank()) {

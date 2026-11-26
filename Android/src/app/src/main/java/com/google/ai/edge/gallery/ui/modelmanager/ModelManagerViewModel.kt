@@ -1145,6 +1145,36 @@ constructor(
     return File(tmpFilePath).exists()
   }
 
+  private fun seedBundledModelIfAvailable(taskId: String, model: Model) {
+    val candidateAssetDirs =
+      when (taskId) {
+        BuiltInTaskId.FACE_REC -> listOf("facerec_models")
+        BuiltInTaskId.UPSCALE -> listOf("upscale_models")
+        BuiltInTaskId.RESTORE -> listOf("restore_models")
+        BuiltInTaskId.MOBILENET -> listOf("mobilenet_models", "plantrecognise_models", "dmcount_models")
+        BuiltInTaskId.MIGAN -> listOf("migan_models")
+        else -> return
+      }
+    if (model.downloadFileName.isEmpty()) return
+    try {
+      val destFile = File(model.getPath(context = context))
+      if (destFile.exists() && destFile.length() > 0L) return
+      for (dir in candidateAssetDirs) {
+        val entries = context.assets.list(dir) ?: continue
+        if (entries.contains(model.downloadFileName)) {
+          destFile.parentFile?.mkdirs()
+          context.assets.open("$dir/${model.downloadFileName}").use { input ->
+            destFile.outputStream().use { output -> input.copyTo(output) }
+          }
+          Log.d(TAG, "Seeded bundled model '$dir/${model.downloadFileName}' to ${destFile.path}")
+          return
+        }
+      }
+    } catch (e: Exception) {
+      Log.w(TAG, "Failed seeding bundled asset for ${model.name}", e)
+    }
+  }
+
   private fun createEmptyUiState(): ModelManagerUiState {
     return ModelManagerUiState(
       tasks = listOf(),
@@ -1166,6 +1196,7 @@ constructor(
         if (checkedModelNames.contains(model.name)) {
           continue
         }
+        seedBundledModelIfAvailable(task.id, model)
         modelDownloadStatus[model.name] = getModelDownloadStatus(model = model)
         modelInstances[model.name] =
           ModelInitializationStatus(status = ModelInitializationStatusType.NOT_INITIALIZED)

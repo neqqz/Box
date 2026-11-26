@@ -1,11 +1,47 @@
 #include "LLMInference.h"
+#include "ggml-backend.h"
+#include <android/log.h>
 #include <jni.h>
+#include <string>
+
+#define TAG "[smollm-jni]"
+#define LOGw(...) __android_log_print(ANDROID_LOG_WARN, TAG, __VA_ARGS__)
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_jegly_offlineLLM_smollm_SmolLM_initBackends(JNIEnv* env, jobject /*unused*/, jstring nativeLibDir) {
+    const char* dirCstr = nativeLibDir ? env->GetStringUTFChars(nativeLibDir, nullptr) : nullptr;
+    if (dirCstr && dirCstr[0] != '\0') {
+        ggml_backend_load_all_from_path(dirCstr);
+    } else {
+        LOGw("nativeLibDir empty; falling back to ggml_backend_load_all() (likely loads nothing on Android)");
+        ggml_backend_load_all();
+    }
+    if (dirCstr) {
+        env->ReleaseStringUTFChars(nativeLibDir, dirCstr);
+    }
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_jegly_offlineLLM_smollm_SmolLM_getGpuDeviceName(JNIEnv* env, jobject /*unused*/) {
+    size_t count = ggml_backend_dev_count();
+    for (size_t i = 0; i < count; ++i) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        if (dev && ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU) {
+            const char* desc = ggml_backend_dev_description(dev);
+            const char* name = ggml_backend_dev_name(dev);
+            std::string label = (desc && desc[0] != '\0') ? desc : (name ? name : "");
+            return env->NewStringUTF(label.c_str());
+        }
+    }
+    return env->NewStringUTF("");
+}
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_jegly_offlineLLM_smollm_SmolLM_loadModel(JNIEnv* env, jobject thiz, jstring modelPath, jfloat minP,
                                             jfloat temperature, jfloat topP, jint topK, jfloat repeatPenalty,
                                             jboolean storeChats, jlong contextSize,
-                                            jstring chatTemplate, jint nThreads, jboolean useMmap, jboolean useMlock) {
+                                            jstring chatTemplate, jint nThreads, jboolean useMmap, jboolean useMlock,
+                                            jint nGpuLayers, jint nThreadsBatch, jboolean kvCacheQ8) {
     jboolean    isCopy           = true;
     const char* modelPathCstr    = env->GetStringUTFChars(modelPath, &isCopy);
     auto*       llmInference     = new LLMInference();
@@ -13,7 +49,8 @@ Java_com_jegly_offlineLLM_smollm_SmolLM_loadModel(JNIEnv* env, jobject thiz, jst
 
     try {
         llmInference->loadModel(modelPathCstr, minP, temperature, topP, topK, repeatPenalty,
-                                storeChats, contextSize, chatTemplateCstr, nThreads, useMmap, useMlock);
+                                storeChats, contextSize, chatTemplateCstr, nThreads, useMmap, useMlock,
+                                nGpuLayers, nThreadsBatch, kvCacheQ8);
     } catch (std::exception& error) {
         env->ReleaseStringUTFChars(modelPath, modelPathCstr);
         env->ReleaseStringUTFChars(chatTemplate, chatTemplateCstr);
@@ -25,6 +62,14 @@ Java_com_jegly_offlineLLM_smollm_SmolLM_loadModel(JNIEnv* env, jobject thiz, jst
     env->ReleaseStringUTFChars(modelPath, modelPathCstr);
     env->ReleaseStringUTFChars(chatTemplate, chatTemplateCstr);
     return reinterpret_cast<jlong>(llmInference);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_jegly_offlineLLM_smollm_SmolLM_prewarmHistory(JNIEnv* env, jobject /*unused*/, jlong modelPtr) {
+    auto* llmInference = reinterpret_cast<LLMInference*>(modelPtr);
+    if (llmInference) {
+        llmInference->prewarmHistory();
+    }
 }
 
 extern "C" JNIEXPORT void JNICALL

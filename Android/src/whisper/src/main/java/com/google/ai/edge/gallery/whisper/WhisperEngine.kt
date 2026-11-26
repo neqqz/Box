@@ -6,6 +6,12 @@ import android.media.MediaRecorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+data class WhisperSegment(
+    val startMs: Long,
+    val endMs: Long,
+    val text: String,
+)
+
 class WhisperEngine {
 
     companion object {
@@ -30,6 +36,14 @@ class WhisperEngine {
             transcribeNative(contextHandle, audioData, language)
         }
 
+    suspend fun transcribeWithSegments(
+        audioData: FloatArray,
+        language: String = "auto",
+    ): List<WhisperSegment> = withContext(Dispatchers.Default) {
+        if (contextHandle == 0L) return@withContext emptyList()
+        parseSegmentsJson(transcribeWithSegmentsNative(contextHandle, audioData, language))
+    }
+
     fun freeModel() {
         if (contextHandle != 0L) {
             freeModelNative(contextHandle)
@@ -39,8 +53,29 @@ class WhisperEngine {
 
     val isLoaded get() = contextHandle != 0L
 
+    private fun parseSegmentsJson(json: String): List<WhisperSegment> {
+        val segments = mutableListOf<WhisperSegment>()
+        val trimmed = json.trim()
+        if (trimmed == "[]" || trimmed.isEmpty()) return segments
+        val pattern = Regex("""\{"s":(\d+),"e":(\d+),"t":"((?:[^"\\]|\\.)*)"\}""")
+        for (match in pattern.findAll(trimmed)) {
+            val startMs = match.groupValues[1].toLongOrNull() ?: continue
+            val endMs = match.groupValues[2].toLongOrNull() ?: continue
+            val text = match.groupValues[3]
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\")
+                .replace("\\n", "\n")
+                .trim()
+            if (text.isNotEmpty()) {
+                segments.add(WhisperSegment(startMs, endMs, text))
+            }
+        }
+        return segments
+    }
+
     private external fun loadModelNative(modelPath: String): Long
     private external fun transcribeNative(handle: Long, audioData: FloatArray, language: String): String
+    private external fun transcribeWithSegmentsNative(handle: Long, audioData: FloatArray, language: String): String
     private external fun freeModelNative(handle: Long)
 }
 

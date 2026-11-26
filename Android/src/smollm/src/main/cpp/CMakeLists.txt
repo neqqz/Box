@@ -3,6 +3,25 @@ project("smollm")
 
 # llama.cpp must be cloned at the project root as a submodule
 # git submodule add https://github.com/ggerganov/llama.cpp.git
+# Dynamic ggml backends + Vulkan GPU offload on arm64-v8a
+set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
+if (ANDROID_ABI STREQUAL "arm64-v8a")
+    set(GGML_CPU_ALL_VARIANTS ON CACHE BOOL "" FORCE)
+    set(GGML_VULKAN ON CACHE BOOL "" FORCE)
+    # NDK has no vulkan.hpp; point VULKAN_HEADERS_DIR at a Khronos Vulkan-Headers checkout.
+    if (DEFINED ENV{VULKAN_HEADERS_DIR})
+        set(Vulkan_INCLUDE_DIR "$ENV{VULKAN_HEADERS_DIR}/include" CACHE PATH "" FORCE)
+    endif()
+    if (DEFINED ENV{SPIRV_HEADERS_DIR})
+        include_directories(SYSTEM "$ENV{SPIRV_HEADERS_DIR}/include")
+    endif()
+    file(GLOB NDK_GLSLC "${ANDROID_NDK}/shader-tools/*/glslc")
+    if (NDK_GLSLC)
+        list(GET NDK_GLSLC 0 NDK_GLSLC_PATH)
+        set(Vulkan_GLSLC_EXECUTABLE "${NDK_GLSLC_PATH}" CACHE FILEPATH "" FORCE)
+    endif()
+endif()
+
 add_subdirectory(../../../../llama.cpp llama.cpp)
 set(LLAMA_DIR_RELATIVE "../../../../llama.cpp")
 get_filename_component(LLAMA_DIR ${LLAMA_DIR_RELATIVE} ABSOLUTE)
@@ -86,15 +105,6 @@ function(build_library_universal target_name)
 endfunction()
 
 build_library_universal("smollm")
-if (${ANDROID_ABI} STREQUAL "arm64-v8a")
-    build_library_arm64("smollm_v8" "-march=armv8-a")
-    build_library_arm64("smollm_v8_2_fp16" "-march=armv8.2-a+fp16")
-    build_library_arm64("smollm_v8_2_fp16_dotprod" "-march=armv8.2-a+fp16+dotprod")
-    build_library_arm64("smollm_v8_4_fp16_dotprod" "-march=armv8.4-a+fp16+dotprod")
-    build_library_arm64("smollm_v8_4_fp16_dotprod_sve" "-march=armv8.4-a+fp16+dotprod+sve")
-    build_library_arm64("smollm_v8_4_fp16_dotprod_i8mm" "-march=armv8.4-a+fp16+dotprod+i8mm")
-    build_library_arm64("smollm_v8_4_fp16_dotprod_i8mm_sve" "-march=armv8.4-a+fp16+dotprod+i8mm+sve")
-endif()
 
 # GGUFReader library
 set(TARGET_NAME_GGUF_READER ggufreader)

@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package com.google.ai.edge.gallery.proto;
+
+option java_package = "com.google.ai.edge.gallery.proto";
+option java_multiple_files = true;
+
+message ScheduledNotification {
+  string id = 1;
+  string title = 2;
+  string message = 3;
+  string channel_id = 4;
+  string channel_name = 5;
+  int32 hour = 6;
+  int32 minute = 7;
+  optional int32 year = 8;
+  optional int32 month = 9;
+  optional int32 day = 10;
+  optional bool repeat_daily = 11;
+  optional string deeplink = 12;
+}
+
+message ScheduledNotifications {
+  repeated ScheduledNotification notification = 1;
+}

@@ -68,6 +68,7 @@ import com.google.ai.edge.gallery.data.ConfigKeys
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.ModelDownloadStatusType
 import com.google.ai.edge.gallery.data.Task
+import com.google.ai.edge.gallery.security.ChatImageStore
 import com.google.ai.edge.gallery.ui.common.ModelPageAppBar
 import com.google.ai.edge.gallery.ui.modelmanager.ModelInitializationStatusType
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
@@ -141,14 +142,38 @@ fun ChatView(
       val messages = llmViewModel.loadConversationHistory(convId)
       Log.d(TAG, "Loaded ${messages?.size ?: 0} messages")
       messages?.forEach { message ->
-        llmViewModel.addMessage(
-          selectedModel,
-          ChatMessageText(
-            content = message.content,
-            side = if (message.role == "user") ChatSide.USER else ChatSide.AGENT,
-            latencyMs = message.latencyMs.toFloat(),
-          ),
-        )
+        val side = if (message.role == "user") ChatSide.USER else ChatSide.AGENT
+        val latency = message.latencyMs.toFloat()
+        val imagePaths =
+          message.imagePaths
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            .orEmpty()
+        if (imagePaths.isNotEmpty()) {
+          val bitmaps = imagePaths.mapNotNull { path -> ChatImageStore.loadImage(context, path) }
+          if (bitmaps.isNotEmpty()) {
+            llmViewModel.addMessage(
+              selectedModel,
+              ChatMessageImage(
+                bitmaps = bitmaps,
+                imageBitMaps = bitmaps.map { it.asImageBitmap() },
+                side = side,
+                latencyMs = latency,
+              ),
+            )
+          }
+        }
+        if (message.content.isNotEmpty()) {
+          llmViewModel.addMessage(
+            selectedModel,
+            ChatMessageText(
+              content = message.content,
+              side = side,
+              latencyMs = latency,
+            ),
+          )
+        }
       }
       llmViewModel.setCurrentConversationId(convId)
       // Load the system prompt for this conversation so the config dialog shows it.

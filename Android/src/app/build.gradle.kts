@@ -14,30 +14,49 @@
  * limitations under the License.
  */
 
+import java.io.ByteArrayInputStream
+import java.util.Base64
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
-  // Note: set apply to true to enable google-services (requires google-services.json).
-  alias(libs.plugins.google.services) apply false
   alias(libs.plugins.kotlin.android)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.protobuf)
   alias(libs.plugins.hilt.application)
-  alias(libs.plugins.oss.licenses)
   alias(libs.plugins.ksp)
   kotlin("kapt")
 }
 
+fun getProps(propName: String): String {
+  val envProps = System.getenv("LOCAL_PROPERTIES")
+  if (envProps != null) {
+    val props = Properties()
+    props.load(ByteArrayInputStream(Base64.getDecoder().decode(envProps)))
+    props.getProperty(propName)?.let { return it }
+  }
+  val file = rootProject.file("local.properties")
+  if (file.exists()) {
+    val props = Properties()
+    file.inputStream().use { props.load(it) }
+    props.getProperty(propName)?.let { return it }
+  }
+  return ""
+}
+
 android {
   namespace = "com.google.ai.edge.gallery"
-  compileSdk = 36
+  compileSdk {
+    version = release(37) { minorApiLevel = 2 }
+  }
 
   defaultConfig {
     applicationId = "com.box.gallery"
-    minSdk = 35
+    minSdk = 33
     targetSdk = 37
-    versionCode = 26
-    versionName = "1.0.12"
+    versionCode = 51
+    versionName = "3.5.7"
 
     // Needed for HuggingFace auth workflows.
     // Use the scheme of the "Redirect URLs" in HuggingFace app.
@@ -48,24 +67,37 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  signingConfigs {
+    create("release") {
+      storeFile = file("release.keystore")
+      storePassword = getProps("KEYSTORE_PASS")
+      keyAlias = getProps("ALIAS_NAME")
+      keyPassword = getProps("ALIAS_PASS")
+    }
+  }
+
   buildTypes {
     release {
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("debug")
+      signingConfig =
+          if (getProps("KEYSTORE_PASS").isNotEmpty()) signingConfigs.getByName("release")
+          else signingConfigs.getByName("debug")
     }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
   }
-  kotlinOptions {
-    jvmTarget = "11"
-    freeCompilerArgs += "-Xcontext-receivers"
-  }
   buildFeatures {
     compose = true
     buildConfig = true
+  }
+}
+
+kotlin {
+  compilerOptions {
+    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
   }
 }
 
@@ -89,24 +121,19 @@ dependencies {
   implementation(libs.androidx.security.crypto)
   implementation(libs.androidx.webkit)
   implementation(libs.litertlm)
+  implementation(libs.litert)
   implementation(libs.commonmark)
   implementation(libs.richtext)
-  implementation(libs.tflite)
-  implementation(libs.tflite.gpu)
-  implementation(libs.tflite.support)
   implementation(libs.camerax.core)
   implementation(libs.camerax.camera2)
   implementation(libs.camerax.lifecycle)
   implementation(libs.camerax.view)
+  implementation(libs.camerax.video)
   implementation(libs.openid.appauth)
   implementation(libs.androidx.splashscreen)
   implementation(libs.protobuf.javalite)
   implementation(libs.hilt.android)
   implementation(libs.hilt.navigation.compose)
-  implementation(libs.play.services.oss.licenses)
-  implementation(platform(libs.firebase.bom))
-  implementation(libs.firebase.analytics)
-  implementation(libs.firebase.messaging)
   implementation(libs.androidx.exifinterface)
   implementation(libs.moshi.kotlin)
 
@@ -131,6 +158,36 @@ dependencies {
   implementation(libs.androidx.material3.adaptive.navigation.suite)
   implementation(libs.androidx.material3.window.size)
 
+  // Box: ML Kit GenAI
+  implementation(libs.mlkit.genai.prompt)
+  implementation(libs.mlkit.genai.image.description)
+  implementation(libs.mlkit.genai.proofreading)
+  implementation(libs.mlkit.genai.rewriting)
+  implementation(libs.mlkit.genai.summarization)
+  implementation(libs.mlkit.genai.speech)
+
+  // Box: ML Kit Vision
+  implementation(libs.mlkit.barcode)
+  implementation(libs.mlkit.face.detection)
+  implementation(libs.mlkit.face.mesh)
+  implementation(libs.mlkit.image.labeling)
+  implementation(libs.mlkit.pose.detection)
+  implementation(libs.mlkit.text.recognition)
+
+  // Box: Networking, MCP, KaTeX
+  implementation(libs.ktor.client.core)
+  implementation(libs.ktor.client.android)
+  implementation(libs.ktor.client.content.negotiation)
+  implementation(libs.ktor.serialization.json)
+  implementation(libs.mcp.kotlin.sdk)
+  implementation(libs.katex.core)
+
+  // Box: PDF, compression, image loading, documents
+  implementation(libs.pdfbox.android)
+  implementation(libs.commons.compress)
+  implementation(libs.coil.compose)
+  implementation(libs.androidx.documentfile)
+
   kapt(libs.hilt.android.compiler)
   testImplementation(libs.junit)
   androidTestImplementation(libs.androidx.junit)
@@ -141,17 +198,9 @@ dependencies {
   debugImplementation(libs.androidx.ui.tooling)
   debugImplementation(libs.androidx.ui.test.manifest)
   ksp(libs.moshi.kotlin.codegen)
-  implementation(libs.mlkit.genai.prompt)
 }
 
 protobuf {
   protoc { artifact = "com.google.protobuf:protoc:4.36.2" }
   generateProtoTasks { all().forEach { it.plugins { create("java") { option("lite") } } } }
-}
-
-// OSS Licenses plugin uses groovy.util.XmlSlurper which was moved to groovy-xml in Groovy 4.x
-// (Gradle 9+). The plugin (0.10.6) hasn't been updated for this. Disable the broken task;
-// the OssLicensesMenuActivity still compiles — it just won't have license data at runtime.
-tasks.configureEach {
-  if (name.endsWith("OssLicensesTask")) enabled = false
 }

@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import com.google.ai.edge.gallery.runtime.runtimeHelper
+import com.google.ai.edge.gallery.security.ChatImageStore
 import com.google.ai.edge.gallery.security.SecurityUtils
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageAudioClip
 import com.google.ai.edge.gallery.ui.common.chat.ChatMessageError
@@ -43,6 +44,7 @@ import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ExperimentalApi
 import com.google.ai.edge.litertlm.ToolProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -57,6 +59,7 @@ open class LlmChatViewModelBase() : ChatViewModel() {
 
   // Box: Chat persistence — will be injected by Hilt in concrete subclasses
   override lateinit var chatRepository: ChatRepository
+  protected lateinit var applicationContext: Context
   private var currentConversationId: String? = null
   private val conversationMutex = Mutex()
 
@@ -116,20 +119,35 @@ open class LlmChatViewModelBase() : ChatViewModel() {
   }
 
   /**
-   * Box: Persist a user message to the encrypted database.
+   * Box: Persist a user message (and optional encrypted image attachments) to the database.
    */
-  private fun persistUserMessage(model: Model, content: String) {
+  private fun persistUserMessage(
+    model: Model,
+    content: String,
+    images: List<Bitmap> = emptyList(),
+  ) {
     val repo = chatRepository ?: return
+    val appCtx = if (::applicationContext.isInitialized) applicationContext else null
     Log.d(TAG, "Attempting to persist user message for model: ${model.name}")
     viewModelScope.launch(Dispatchers.IO) {
       try {
+        val savedImagePaths = if (appCtx != null && images.isNotEmpty()) {
+          images.mapNotNull { bmp -> ChatImageStore.saveImage(appCtx, bmp) }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(",")
+        } else {
+          null
+        }
+        val persistedContent = content.ifEmpty {
+          if (images.size == 1) "[Image]" else "[${images.size} Images]"
+        }
         // Use Mutex to ensure thread-safe conversation creation
         conversationMutex.withLock {
           // Get or create conversation ID
           val convId = if (currentConversationId == null) {
             Log.d(TAG, "Creating new conversation for model: ${model.name}")
             val conv = repo.createConversation(
-              title = content.take(50),
+              title = persistedContent.take(50),
               taskType = "llm_chat",
               modelName = model.name,
               systemPrompt = _currentSystemPrompt.value,
@@ -140,13 +158,14 @@ open class LlmChatViewModelBase() : ChatViewModel() {
           } else {
             currentConversationId!!
           }
-          
+
           // Now save the message with the guaranteed conversation ID
           try {
             repo.saveMessage(
               conversationId = convId,
               role = "user",
-              content = SecurityUtils.sanitizePrompt(content),
+              content = SecurityUtils.sanitizePrompt(persistedContent),
+              imagePaths = savedImagePaths,
             )
             Log.d(TAG, "Successfully persisted user message to conversation: $convId")
           } catch (fkException: android.database.sqlite.SQLiteConstraintException) {
@@ -156,7 +175,8 @@ open class LlmChatViewModelBase() : ChatViewModel() {
             repo.saveMessage(
               conversationId = convId,
               role = "user",
-              content = SecurityUtils.sanitizePrompt(content),
+              content = SecurityUtils.sanitizePrompt(persistedContent),
+              imagePaths = savedImagePaths,
             )
             Log.d(TAG, "Successfully persisted user message to conversation on retry: $convId")
           }
@@ -225,9 +245,9 @@ open class LlmChatViewModelBase() : ChatViewModel() {
       setInProgress(true)
       setPreparing(true)
 
-      // Box: Persist user message to encrypted DB
-      if (input.isNotEmpty()) {
-        persistUserMessage(model, input)
+      // Box: Persist user message + images to encrypted DB
+      if (input.isNotEmpty() || images.isNotEmpty()) {
+        persistUserMessage(model, input, images)
       }
 
       // Loading.
@@ -516,19 +536,31 @@ open class LlmChatViewModelBase() : ChatViewModel() {
 }
 
 @HiltViewModel class LlmChatViewModel @Inject constructor(
-  repo: ChatRepository
+  repo: ChatRepository,
+  @ApplicationContext context: Context,
 ) : LlmChatViewModelBase() {
-  init { chatRepository = repo }
+  init {
+    chatRepository = repo
+    applicationContext = context
+  }
 }
 
 @HiltViewModel class LlmAskImageViewModel @Inject constructor(
-  repo: ChatRepository
+  repo: ChatRepository,
+  @ApplicationContext context: Context,
 ) : LlmChatViewModelBase() {
-  init { chatRepository = repo }
+  init {
+    chatRepository = repo
+    applicationContext = context
+  }
 }
 
 @HiltViewModel class LlmAskAudioViewModel @Inject constructor(
-  repo: ChatRepository
+  repo: ChatRepository,
+  @ApplicationContext context: Context,
 ) : LlmChatViewModelBase() {
-  init { chatRepository = repo }
+  init {
+    chatRepository = repo
+    applicationContext = context
+  }
 }

@@ -11,8 +11,10 @@ class LLMInference {
 public:
     void loadModel(const char *model_path, float minP, float temperature, float topP, int topK,
                    float repeatPenalty, bool storeChats, long contextSize, const char *chatTemplate,
-                   int nThreads, bool useMmap, bool useMlock);
+                   int nThreads, bool useMmap, bool useMlock,
+                   int nGpuLayers = 0, int nThreadsBatch = -1, bool kvCacheQ8 = false);
     void addChatMessage(const char *message, const char *role);
+    void prewarmHistory();
     float getResponseGenerationTime() const;
     int getContextSizeUsed() const;
     void startCompletion(const char *query);

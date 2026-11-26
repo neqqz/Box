@@ -78,6 +78,64 @@ Java_com_google_ai_edge_gallery_whisper_WhisperEngine_transcribeNative(
     return env->NewStringUTF(text.c_str());
 }
 
+JNIEXPORT jstring JNICALL
+Java_com_google_ai_edge_gallery_whisper_WhisperEngine_transcribeWithSegmentsNative(
+        JNIEnv* env, jobject, jlong handle, jfloatArray audioData, jstring language) {
+    auto* ctx = reinterpret_cast<whisper_context*>(handle);
+    if (!ctx) return env->NewStringUTF("[]");
+
+    jsize n_samples = env->GetArrayLength(audioData);
+    jfloat* samples = env->GetFloatArrayElements(audioData, nullptr);
+    const char* lang = env->GetStringUTFChars(language, nullptr);
+
+    whisper_full_params params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
+    params.print_progress   = false;
+    params.print_special    = false;
+    params.print_realtime   = false;
+    params.print_timestamps = true;
+    params.translate        = false;
+    params.language         = lang;
+    params.n_threads        = 4;
+    params.no_context       = true;
+    params.single_segment   = false;
+
+    int result = whisper_full(ctx, params, samples, n_samples);
+
+    env->ReleaseFloatArrayElements(audioData, samples, JNI_ABORT);
+    env->ReleaseStringUTFChars(language, lang);
+
+    if (result != 0) {
+        LOGE("whisper_full failed: %d", result);
+        return env->NewStringUTF("[]");
+    }
+
+    std::string json = "[";
+    int n_segments = whisper_full_n_segments(ctx);
+    bool first = true;
+    for (int i = 0; i < n_segments; i++) {
+        const char* raw = whisper_full_get_segment_text(ctx, i);
+        if (!raw) continue;
+        int64_t t0_ms = whisper_full_get_segment_t0(ctx, i) * 10;
+        int64_t t1_ms = whisper_full_get_segment_t1(ctx, i) * 10;
+
+        std::string escaped;
+        for (const char* p = raw; *p; ++p) {
+            if (*p == '\\') escaped += "\\\\";
+            else if (*p == '"') escaped += "\\\"";
+            else if (*p == '\n') escaped += "\\n";
+            else if (*p == '\r') continue;
+            else escaped += *p;
+        }
+        if (!first) json += ",";
+        first = false;
+        json += "{\"s\":" + std::to_string(t0_ms)
+              + ",\"e\":" + std::to_string(t1_ms)
+              + ",\"t\":\"" + escaped + "\"}";
+    }
+    json += "]";
+    return env->NewStringUTF(json.c_str());
+}
+
 JNIEXPORT void JNICALL
 Java_com_google_ai_edge_gallery_whisper_WhisperEngine_freeModelNative(
         JNIEnv*, jobject, jlong handle) {

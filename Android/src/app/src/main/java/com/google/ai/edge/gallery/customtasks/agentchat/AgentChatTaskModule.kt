@@ -21,11 +21,13 @@ import androidx.compose.runtime.Composable
 import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.customtasks.common.CustomTask
 import com.google.ai.edge.gallery.customtasks.common.CustomTaskDataForBuiltinTask
+import com.google.ai.edge.gallery.customtasks.mcp.McpToolSet
 import com.google.ai.edge.gallery.data.BuiltInTaskId
 import com.google.ai.edge.gallery.data.Category
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.ui.llmchat.LlmChatModelHelper
+import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.tool
 import dagger.Module
 import dagger.Provides
@@ -34,9 +36,52 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
+const val PROMPT_WITH_MCP_TOOLS = """
+You are an AI assistant that helps users by answering questions and completing tasks using skills and tools. For EVERY new task, request, or question, you MUST execute the following steps in exact order. You MUST NOT skip any steps.
+
+CRITICAL RULE: You MUST execute all steps silently. Do NOT generate or output any internal thoughts, reasoning, explanations, or intermediate text at ANY step.
+
+1. EVALUATE AND ROUTE:
+   Determine if the request should be handled by a "Skill" (requires loading instructions) or directly by an "MCP Tool".
+   - If it is a Skill: Go to Step 2.
+   - If it is an MCP Tool: Go to Step 4.
+   - If nothing is found, output "No skills or tools found" and stop.
+
+--- SKILLS ---
+___SKILLS___
+
+--- MCP TOOLS ---
+___TOOLS___
+
+==================================================
+FLOW A: SKILL EXECUTION
+==================================================
+
+2. Find the most relevant skill from the --- SKILLS --- list. You MUST NOT use `run_intent` or `runMcpTool` under any circumstances at this step.
+
+3. Use the `load_skill` tool to read its instructions. Follow the skill's instructions exactly to complete the task.
+   - You MUST NOT output any intermediate thoughts or status updates. No exceptions!
+   - Output ONLY the final result when successful. It should contain a one-sentence summary of the action taken and the final result of the skill.
+   - Stop here once Flow A is complete.
+
+==================================================
+FLOW B: MCP TOOL DIRECT EXECUTION
+==================================================
+
+4. Find the most relevant tool from the --- MCP TOOLS --- list.
+
+5. Call the `runMcpTool` tool with the following parameters:
+   - `toolName`: The name of the tool to run. Use the exact name from the list above. Do not hallucinate the name. Pay attention to casing and plurals.
+   - `input`: The input JSON object that matches the tool's expected input schema.
+
+6. Output ONLY the final result returned by the tool. You MUST NOT output any intermediate thoughts or status updates. No exceptions!
+"""
 
 class AgentChatTask @Inject constructor() : CustomTask {
   private val agentTools = AgentTools()
+  private val mcpToolSet = McpToolSet().apply { agentTools = this@AgentChatTask.agentTools }
 
   override val task: Task =
     Task(
@@ -77,22 +122,39 @@ class AgentChatTask @Inject constructor() : CustomTask {
     model: Model,
     onDone: (String) -> Unit,
   ) {
-    agentTools.skillManagerViewModel.loadSkills {
-      LlmChatModelHelper.initialize(
-        context = context,
-        model = model,
-        supportImage = true,
-        supportAudio = true,
-        onDone = onDone,
-        systemInstruction =
-          if (agentTools.skillManagerViewModel.getSelectedSkills().isEmpty()) {
-            null
-          } else {
-            agentTools.skillManagerViewModel.getSystemPrompt(task.defaultSystemPrompt)
-          },
-        tools = listOf(tool(agentTools)),
-        enableConversationConstrainedDecoding = true,
-      )
+    coroutineScope.launch {
+      mcpToolSet.mcpManagerViewModel?.ensureAllEnabledConnected()
+      agentTools.skillManagerViewModel.loadSkills {
+        val mcpPrompt = mcpToolSet.mcpManagerViewModel?.getToolsPromptSection().orEmpty()
+        val hasSkills = agentTools.skillManagerViewModel.getSelectedSkills().isNotEmpty()
+        val hasMcpTools = mcpPrompt.isNotEmpty()
+        val systemInstruction: Contents? =
+          when {
+            !hasSkills && !hasMcpTools -> null
+            hasMcpTools -> {
+              val skillsText = agentTools.skillManagerViewModel.getSelectedSkillsNamesAndDescriptions()
+              Contents.of(
+                PROMPT_WITH_MCP_TOOLS.trimIndent()
+                  .replace("___SKILLS___", skillsText)
+                  .replace("___TOOLS___", mcpPrompt)
+              )
+            }
+            else -> agentTools.skillManagerViewModel.getSystemPrompt(task.defaultSystemPrompt)
+          }
+        val activeTools =
+          if (hasMcpTools) listOf(tool(agentTools), tool(mcpToolSet))
+          else listOf(tool(agentTools))
+        LlmChatModelHelper.initialize(
+          context = context,
+          model = model,
+          supportImage = true,
+          supportAudio = true,
+          onDone = onDone,
+          systemInstruction = systemInstruction,
+          tools = activeTools,
+          enableConversationConstrainedDecoding = true,
+        )
+      }
     }
   }
 
@@ -113,6 +175,7 @@ class AgentChatTask @Inject constructor() : CustomTask {
       modelManagerViewModel = myData.modelManagerViewModel,
       navigateUp = myData.onNavUp,
       agentTools = agentTools,
+      mcpToolSet = mcpToolSet,
     )
   }
 }

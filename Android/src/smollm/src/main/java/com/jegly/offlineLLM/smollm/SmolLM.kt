@@ -1,68 +1,18 @@
 package com.jegly.offlineLLM.smollm
 
-import android.os.Build
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileNotFoundException
 
 class SmolLM {
     companion object {
         private const val TAG = "SmolLM"
 
         init {
-            val cpuFeatures = getCPUFeatures()
-            val hasFp16 = cpuFeatures.contains("fp16") || cpuFeatures.contains("fphp")
-            val hasDotProd = cpuFeatures.contains("dotprod") || cpuFeatures.contains("asimddp")
-            val hasSve = cpuFeatures.contains("sve")
-            val hasI8mm = cpuFeatures.contains("i8mm")
-            val isAtLeastArmV82 =
-                cpuFeatures.contains("asimd") &&
-                    cpuFeatures.contains("crc32") &&
-                    cpuFeatures.contains("aes")
-            val isAtLeastArmV84 = cpuFeatures.contains("dcpop") && cpuFeatures.contains("uscat")
-
-            val isEmulated =
-                (Build.HARDWARE.contains("goldfish") || Build.HARDWARE.contains("ranchu"))
-
-            if (!isEmulated) {
-                if (supportsArm64V8a()) {
-                    if (isAtLeastArmV84 && hasSve && hasI8mm && hasFp16 && hasDotProd) {
-                        System.loadLibrary("smollm_v8_4_fp16_dotprod_i8mm_sve")
-                    } else if (isAtLeastArmV84 && hasSve && hasFp16 && hasDotProd) {
-                        System.loadLibrary("smollm_v8_4_fp16_dotprod_sve")
-                    } else if (isAtLeastArmV84 && hasI8mm && hasFp16 && hasDotProd) {
-                        System.loadLibrary("smollm_v8_4_fp16_dotprod_i8mm")
-                    } else if (isAtLeastArmV84 && hasFp16 && hasDotProd) {
-                        System.loadLibrary("smollm_v8_4_fp16_dotprod")
-                    } else if (isAtLeastArmV82 && hasFp16 && hasDotProd) {
-                        System.loadLibrary("smollm_v8_2_fp16_dotprod")
-                    } else if (isAtLeastArmV82 && hasFp16) {
-                        System.loadLibrary("smollm_v8_2_fp16")
-                    } else {
-                        System.loadLibrary("smollm_v8")
-                    }
-                } else {
-                    System.loadLibrary("smollm")
-                }
-            } else {
-                System.loadLibrary("smollm")
-            }
+            System.loadLibrary("smollm")
         }
-
-        private fun getCPUFeatures(): String {
-            return try {
-                File("/proc/cpuinfo").readText()
-                    .substringAfter("Features").substringAfter(":").substringBefore("\n").trim()
-            } catch (e: FileNotFoundException) {
-                ""
-            }
-        }
-
-        private fun supportsArm64V8a(): Boolean = Build.SUPPORTED_ABIS[0] == "arm64-v8a"
     }
 
     private var nativePtr = 0L
@@ -79,6 +29,9 @@ class SmolLM {
         val numThreads: Int = 4,
         val useMmap: Boolean = true,
         val useMlock: Boolean = false,
+        val nGpuLayers: Int = 0,
+        val numThreadsBatch: Int = -1,
+        val kvCacheQ8: Boolean = false,
     )
 
     object DefaultParams {
@@ -87,11 +40,24 @@ class SmolLM {
             "{% for message in messages %}{% if loop.first and messages[0]['role'] != 'system' %}{{ '<|im_start|>system You are a helpful AI assistant.<|im_end|> ' }}{% endif %}{{'<|im_start|>' + message['role'] + ' ' + message['content'] + '<|im_end|>' + ' '}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant ' }}{% endif %}"
     }
 
+    fun loadBackends(nativeLibDir: String) {
+        initBackends(nativeLibDir)
+    }
+
+    fun getGpuDeviceInfo(): String {
+        return try {
+            getGpuDeviceName()
+        } catch (_: Throwable) {
+            ""
+        }
+    }
+
     suspend fun load(modelPath: String, params: InferenceParams = InferenceParams()) =
         withContext(Dispatchers.IO) {
             val ggufReader = GGUFReader()
             ggufReader.load(modelPath)
-            val modelContextSize = ggufReader.getContextSize() ?: DefaultParams.CONTEXT_SIZE
+            val maxAutoCtx = if (File(modelPath).length() > 2_147_483_648L) 4096L else 8192L
+            val modelContextSize = minOf(ggufReader.getContextSize() ?: DefaultParams.CONTEXT_SIZE, maxAutoCtx)
             val modelChatTemplate = ggufReader.getChatTemplate() ?: DefaultParams.CHAT_TEMPLATE
             nativePtr = loadModel(
                 modelPath,
@@ -106,6 +72,9 @@ class SmolLM {
                 params.numThreads,
                 params.useMmap,
                 params.useMlock,
+                params.nGpuLayers,
+                params.numThreadsBatch,
+                params.kvCacheQ8,
             )
         }
 
@@ -128,6 +97,11 @@ class SmolLM {
 
     fun addAssistantMessage(message: String) {
         addChatMessage("assistant", message)
+    }
+
+    fun prewarmHistory() {
+        verifyHandle()
+        prewarmHistory(nativePtr)
     }
 
     fun getResponseGenerationSpeed(): Float {
@@ -182,13 +156,18 @@ class SmolLM {
         check(nativePtr != 0L) { "Model is not loaded. Call SmolLM.load() first." }
     }
 
+    private external fun initBackends(nativeLibDir: String)
+    private external fun getGpuDeviceName(): String
+
     private external fun loadModel(
         modelPath: String, minP: Float, temperature: Float, topP: Float, topK: Int,
         repeatPenalty: Float, storeChats: Boolean, contextSize: Long, chatTemplate: String,
-        nThreads: Int, useMmap: Boolean, useMlock: Boolean
+        nThreads: Int, useMmap: Boolean, useMlock: Boolean,
+        nGpuLayers: Int, nThreadsBatch: Int, kvCacheQ8: Boolean,
     ): Long
 
     private external fun addChatMessage(modelPtr: Long, message: String, role: String)
+    private external fun prewarmHistory(modelPtr: Long)
     private external fun getResponseGenerationSpeed(modelPtr: Long): Float
     private external fun getContextSizeUsed(modelPtr: Long): Int
     private external fun close(modelPtr: Long)

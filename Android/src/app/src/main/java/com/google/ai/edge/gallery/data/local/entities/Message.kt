@@ -26,4 +26,5 @@ data class Message(
     val timestamp: Long = System.currentTimeMillis(),
     val tokenCount: Int = 0,
     val latencyMs: Long = 0,
+    val imagePaths: String? = null,
 )

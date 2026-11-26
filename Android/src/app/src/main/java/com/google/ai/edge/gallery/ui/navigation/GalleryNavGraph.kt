@@ -95,6 +95,7 @@ private const val TAG = "AGGalleryNavGraph"
 private const val ROUTE_HOMESCREEN = "homepage"
 private const val ROUTE_MODEL_LIST = "model_list"
 private const val ROUTE_MODEL = "route_model"
+private const val ROUTE_TASK_DIRECT = "route_task_direct"
 private const val ROUTE_BENCHMARK = "benchmark"
 private const val ROUTE_MODEL_MANAGER = "model_manager"
 private const val ROUTE_CHAT_HISTORY = "chat_history"
@@ -198,7 +199,11 @@ fun GalleryNavHost(
           navigateToTaskScreen = { task ->
             pickedTask = task
             enableModelListAnimation = true
-            navController.navigate(ROUTE_MODEL_LIST)
+            if (task.models.isEmpty()) {
+              navController.navigate("$ROUTE_TASK_DIRECT/${task.id}")
+            } else {
+              navController.navigate(ROUTE_MODEL_LIST)
+            }
             firebaseAnalytics?.logEvent(
               GalleryEvent.CAPABILITY_SELECT.id,
               Bundle().apply { putString("capability_name", task.id) },
@@ -256,6 +261,51 @@ fun GalleryNavHost(
             navController.navigateUp()
           },
         )
+      }
+    }
+
+    // Direct task route for tasks without downloadable model lists (e.g. RAG, Translator, BgRemoval).
+    composable(
+      route = "$ROUTE_TASK_DIRECT/{taskId}",
+      arguments = listOf(navArgument("taskId") { type = NavType.StringType }),
+      enterTransition = { slideEnter() },
+      exitTransition = { slideExit() },
+    ) { backStackEntry ->
+      val taskId = backStackEntry.arguments?.getString("taskId") ?: ""
+      val customTask = modelManagerViewModel.getCustomTaskByTaskId(id = taskId)
+      if (customTask != null) {
+        var disableAppBarControls by remember { mutableStateOf(false) }
+        var hideTopBar by remember { mutableStateOf(false) }
+        var customNavigateUpCallback by remember { mutableStateOf<(() -> Unit)?>(null) }
+        CustomTaskScreen(
+          task = customTask.task,
+          modelManagerViewModel = modelManagerViewModel,
+          onNavigateUp = {
+            if (customNavigateUpCallback != null) {
+              customNavigateUpCallback?.invoke()
+            } else {
+              enableModelListAnimation = false
+              lastNavigatedModelName = ""
+              navController.navigateUp()
+            }
+          },
+          disableAppBarControls = disableAppBarControls,
+          hideTopBar = hideTopBar,
+          useThemeColor = customTask.task.useThemeColor,
+          checkModelDownload = false,
+        ) { bottomPadding ->
+          customTask.MainScreen(
+            data =
+              CustomTaskData(
+                modelManagerViewModel = modelManagerViewModel,
+                bottomPadding = bottomPadding,
+                setAppBarControlsDisabled = { disableAppBarControls = it },
+                setTopBarVisible = { hideTopBar = !it },
+                conversationId = null,
+                setCustomNavigateUpCallback = { customNavigateUpCallback = it },
+              )
+          )
+        }
       }
     }
 
@@ -450,7 +500,11 @@ fun GalleryNavHost(
   if (data != null) {
     intent.data = null
     Log.d(TAG, "navigation link clicked: $data")
-    if (data.toString().startsWith("com.google.ai.edge.gallery://model/")) {
+    val dataUriString = data.toString()
+    if (
+      dataUriString.startsWith("com.box.gallery://model/") ||
+        dataUriString.startsWith("com.google.ai.edge.gallery://model/")
+    ) {
       if (data.pathSegments.size >= 2) {
         val taskId = data.pathSegments.get(data.pathSegments.size - 2)
         val modelName = data.pathSegments.last()
@@ -460,8 +514,29 @@ fun GalleryNavHost(
       } else {
         Log.e(TAG, "Malformed deep link URI received: $data")
       }
-    } else if (data.toString() == "com.google.ai.edge.gallery://global_model_manager") {
+    } else if (
+      dataUriString == "com.box.gallery://global_model_manager" ||
+        dataUriString == "com.google.ai.edge.gallery://global_model_manager"
+    ) {
       navController.navigate(ROUTE_MODEL_MANAGER)
+    } else if (dataUriString.startsWith("com.box.gallery://shortcut/")) {
+      val taskId = dataUriString.removePrefix("com.box.gallery://shortcut/").substringBefore("?")
+      val targetTask = modelManagerViewModel.getTaskById(taskId)
+      if (targetTask != null) {
+        pickedTask = targetTask
+        if (targetTask.models.isEmpty()) {
+          navController.navigate("$ROUTE_TASK_DIRECT/${targetTask.id}")
+        } else {
+          val downloaded = targetTask.models.firstOrNull { cand ->
+            modelManagerViewModel.uiState.value.modelDownloadStatus[cand.name]?.status == ModelDownloadStatusType.SUCCEEDED
+          }
+          if (downloaded != null) {
+            navController.navigate("$ROUTE_MODEL/${targetTask.id}/${downloaded.name}")
+          } else {
+            navController.navigate(ROUTE_MODEL_LIST)
+          }
+        }
+      }
     }
   }
 }
@@ -473,6 +548,7 @@ private fun CustomTaskScreen(
   disableAppBarControls: Boolean,
   hideTopBar: Boolean,
   useThemeColor: Boolean,
+  checkModelDownload: Boolean = true,
   onNavigateUp: () -> Unit,
   content: @Composable (bottomPadding: Dp) -> Unit,
 ) {
@@ -494,8 +570,8 @@ private fun CustomTaskScreen(
 
   // Initialize model when model/download state changes.
   val curDownloadStatus = modelManagerUiState.modelDownloadStatus[selectedModel.name]
-  LaunchedEffect(curDownloadStatus, selectedModel.name) {
-    if (!navigatingUp) {
+  LaunchedEffect(checkModelDownload, curDownloadStatus, selectedModel.name) {
+    if (checkModelDownload && !navigatingUp) {
       if (curDownloadStatus?.status == ModelDownloadStatusType.SUCCEEDED) {
         Log.d(
           TAG,
@@ -507,8 +583,9 @@ private fun CustomTaskScreen(
   }
 
   val modelInitializationStatus = modelManagerUiState.modelInitializationStatus[selectedModel.name]
-  LaunchedEffect(modelInitializationStatus) {
-    showErrorDialog = modelInitializationStatus?.status == ModelInitializationStatusType.ERROR
+  LaunchedEffect(checkModelDownload, modelInitializationStatus) {
+    showErrorDialog =
+      checkModelDownload && modelInitializationStatus?.status == ModelInitializationStatusType.ERROR
   }
 
   Scaffold(
@@ -578,20 +655,24 @@ private fun CustomTaskScreen(
           end = innerPadding.calculateStartPadding(LocalLayoutDirection.current),
         )
     ) {
-      val curModelDownloadStatus = modelManagerUiState.modelDownloadStatus[selectedModel.name]
-      AnimatedContent(
-        targetState = curModelDownloadStatus?.status == ModelDownloadStatusType.SUCCEEDED
-      ) { targetState ->
-        when (targetState) {
-          // Main UI when model is downloaded.
-          true -> content(innerPadding.calculateBottomPadding())
-          // Model download
-          false ->
-            ModelDownloadStatusInfoPanel(
-              model = selectedModel,
-              task = task,
-              modelManagerViewModel = modelManagerViewModel,
-            )
+      if (!checkModelDownload) {
+        content(innerPadding.calculateBottomPadding())
+      } else {
+        val curModelDownloadStatus = modelManagerUiState.modelDownloadStatus[selectedModel.name]
+        AnimatedContent(
+          targetState = curModelDownloadStatus?.status == ModelDownloadStatusType.SUCCEEDED
+        ) { targetState ->
+          when (targetState) {
+            // Main UI when model is downloaded.
+            true -> content(innerPadding.calculateBottomPadding())
+            // Model download
+            false ->
+              ModelDownloadStatusInfoPanel(
+                model = selectedModel,
+                task = task,
+                modelManagerViewModel = modelManagerViewModel,
+              )
+          }
         }
       }
     }

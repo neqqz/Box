@@ -106,6 +106,7 @@ import androidx.compose.ui.unit.dp
 import com.google.ai.edge.gallery.GalleryEvent
 import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.common.clearFocusOnKeyboardDismiss
+import com.google.ai.edge.gallery.customtasks.mcp.McpManagerViewModel
 import com.google.ai.edge.gallery.data.MAX_RECOMMENDED_SKILL_COUNT
 import com.google.ai.edge.gallery.firebaseAnalytics
 import com.google.ai.edge.gallery.proto.Skill
@@ -154,6 +155,8 @@ private const val TAG = "AGSkillManagerBottomSheet"
 fun SkillManagerBottomSheet(
   agentTools: AgentTools,
   skillManagerViewModel: SkillManagerViewModel,
+  mcpManagerViewModel: McpManagerViewModel? = null,
+  onOpenMcpManager: (() -> Unit)? = null,
   onDismiss: (selectedSkillsChanged: Boolean) -> Unit,
 ) {
   val uiState by skillManagerViewModel.uiState.collectAsState()
@@ -343,6 +346,27 @@ fun SkillManagerBottomSheet(
                   contentDescription = stringResource(R.string.cd_close_icon),
                 )
               }
+            }
+          }
+
+          if (mcpManagerViewModel != null && onOpenMcpManager != null) {
+            val mcpUiState by mcpManagerViewModel.uiState.collectAsState()
+            OutlinedButton(
+              onClick = {
+                scope.launch {
+                  sheetState.hide()
+                  onOpenMcpManager()
+                }
+              },
+              modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            ) {
+              Text(
+                pluralStringResource(
+                  R.plurals.mcp_servers_count,
+                  mcpUiState.mcpServers.size,
+                  mcpUiState.mcpServers.size,
+                ) + " · ${stringResource(R.string.manage_mcp_servers)}"
+              )
             }
           }
 

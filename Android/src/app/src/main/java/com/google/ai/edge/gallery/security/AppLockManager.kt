@@ -2,6 +2,9 @@ package com.google.ai.edge.gallery.security
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.Build
+import android.security.advancedprotection.AdvancedProtectionManager
+import android.util.Log
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -29,9 +32,19 @@ object AppLockManager {
 
     private var isBiometricLockEnabled = false
 
+    fun isAdvancedProtectionActive(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < 36) return false
+        return try {
+            context.getSystemService(AdvancedProtectionManager::class.java)?.isAdvancedProtectionEnabled == true
+        } catch (t: Throwable) {
+            Log.w("BoxAdvancedProtection", "Could not read Advanced Protection state; treating as off", t)
+            false
+        }
+    }
+
     fun init(context: Context) {
         val prefs = getPrefs(context)
-        isBiometricLockEnabled = prefs.getBoolean(KEY_BIOMETRIC_LOCK, false)
+        isBiometricLockEnabled = isAdvancedProtectionActive(context) || prefs.getBoolean(KEY_BIOMETRIC_LOCK, false)
         _screenshotsEnabled.value = prefs.getBoolean(KEY_SCREENSHOTS_ENABLED, false)
         
         // Observe app lifecycle
@@ -47,6 +60,10 @@ object AppLockManager {
     }
 
     fun setBiometricLockEnabled(context: Context, enabled: Boolean) {
+        if (!enabled && isAdvancedProtectionActive(context)) {
+            SecurityAuditLog.log(context, "BIOMETRIC_LOCK_DISABLE_BLOCKED_BY_ADVANCED_PROTECTION")
+            return
+        }
         val prefs = getPrefs(context)
         prefs.edit().putBoolean(KEY_BIOMETRIC_LOCK, enabled).apply()
         isBiometricLockEnabled = enabled

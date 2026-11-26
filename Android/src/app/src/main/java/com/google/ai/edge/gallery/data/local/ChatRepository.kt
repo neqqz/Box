@@ -4,6 +4,7 @@ import com.google.ai.edge.gallery.data.local.dao.ConversationDao
 import com.google.ai.edge.gallery.data.local.dao.MessageDao
 import com.google.ai.edge.gallery.data.local.entities.Conversation
 import com.google.ai.edge.gallery.data.local.entities.Message
+import com.google.ai.edge.gallery.security.ChatImageStore
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,10 +49,15 @@ class ChatRepository @Inject constructor(
     suspend fun updateConversation(conversation: Conversation) =
         conversationDao.update(conversation)
 
-    suspend fun deleteConversation(conversation: Conversation) =
+    suspend fun deleteConversation(conversation: Conversation) {
+        deleteImagesForConversation(conversation.id)
         conversationDao.delete(conversation)
+    }
 
-    suspend fun deleteAllConversations() = conversationDao.deleteAll()
+    suspend fun deleteAllConversations() {
+        getAllConversationsSync().forEach { deleteImagesForConversation(it.id) }
+        conversationDao.deleteAll()
+    }
 
     suspend fun getLatestConversationForModel(modelName: String): Conversation? =
         conversationDao.getLatestForModel(modelName)
@@ -70,6 +76,7 @@ class ChatRepository @Inject constructor(
         content: String,
         tokenCount: Int = 0,
         latencyMs: Long = 0,
+        imagePaths: String? = null,
     ): Message {
         val message = Message(
             conversationId = conversationId,
@@ -77,6 +84,7 @@ class ChatRepository @Inject constructor(
             content = content,
             tokenCount = tokenCount,
             latencyMs = latencyMs,
+            imagePaths = imagePaths,
         )
         messageDao.insert(message)
 
@@ -99,6 +107,17 @@ class ChatRepository @Inject constructor(
         return message
     }
 
-    suspend fun deleteMessagesForConversation(conversationId: String) =
+    suspend fun deleteMessagesForConversation(conversationId: String) {
+        deleteImagesForConversation(conversationId)
         messageDao.deleteAllForConversation(conversationId)
+    }
+
+    private suspend fun deleteImagesForConversation(conversationId: String) {
+        messageDao.getMessagesForConversationSync(conversationId)
+            .mapNotNull { it.imagePaths }
+            .flatMap { it.split(",") }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .forEach { path -> ChatImageStore.deleteImage(path) }
+    }
 }

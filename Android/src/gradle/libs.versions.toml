@@ -5,8 +5,8 @@ coreKtx = "1.19.1"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
-lifecycleRuntimeKtx = "2.8.7"
-activityCompose = "1.10.1"
+lifecycleRuntimeKtx = "2.11.0"
+activityCompose = "1.13.0"
 composeBom = "2026.11.01"
 navigation = "2.10.2"
 serializationPlugin = "2.4.21"
@@ -15,39 +15,59 @@ materialIconExtended = "1.7.8"
 workRuntime = "2.12.0"
 dataStore = "1.3.0"
 gson = "2.15.0"
-lifecycleProcess = "2.8.7"
+lifecycleProcess = "2.11.0"
 webkit = "1.18.0"
 protobuf = "0.10.1"
 protobufJavaLite = "4.36.2"
 #noinspection GradleDependency
 litertlm = "0.10.0"
+litert = "2.3.0"
 commonmark = "1.0.0-alpha05"
 richtext = "1.0.0-alpha05"
-playServicesTfliteJava = "16.5.0"
-playServicesTfliteGpu= "16.5.0"
-cameraX = "1.7.0"
+cameraX = "1.6.2"
 netOpenidAppauth = "0.11.1"
 splashscreen = "1.2.0"
 hilt = "2.60.1"
 hiltNavigation = "1.4.0"
-ossLicenses = "0.10.6"
-playServicesOssLicenses = "17.1.0"
-googleService = "4.4.3"
-firebaseBom = "33.16.0"
 exifinterface = "1.4.2"
 securityCrypto = "1.1.0"
 kotlinReflect = "2.4.21"
 moshi = "1.15.2"
 ksp = "2.3.14"
-mlkit-genai-prompt = "1.0.0-beta5"  # Ref: https://developers.google.com/ml-kit/genai/prompt/android/get-started#configure-project
+mlkit-genai-prompt = "1.0.0-beta4"
+mlkit-genai-image-description = "1.0.0-beta1"
+mlkit-genai-proofreading = "1.0.0-beta1"
+mlkit-genai-rewriting = "1.0.0-beta1"
+mlkit-genai-summarization = "1.0.0-beta1"
+mlkit-genai-speech = "1.0.0-alpha1"
+mlkit-barcode = "17.3.0"
+mlkit-face-detection = "16.1.7"
+mlkit-face-mesh = "16.0.0-beta3"
+mlkit-image-labeling = "17.0.9"
+mlkit-pose-detection = "18.0.0-beta5"
+mlkit-text-recognition = "16.0.1"
 # Box: Security & persistence
-biometric = "1.4.0-rc01"
+biometric = "1.2.0-alpha05"
 room = "2.8.5"
-sqlcipher = "4.20.0"
-sqlite = "2.4.0"
+sqlcipher = "4.6.1"
+sqlite = "2.7.1"
 # Box: Material 3 adaptive
-material3AdaptiveNavSuite = "1.3.2"
-material3WindowSize = "1.3.2"
+material3AdaptiveNavSuite = "1.5.0-rc01"
+material3WindowSize = "1.5.0-rc01"
+# Box: Networking & MCP
+ktor = "3.4.3"
+mcpSdk = "0.16.0"
+# Box: KaTeX math rendering
+katexCore = "0.3.3"
+# Box: PDF / compression
+pdfboxAndroid = "2.0.27.0"
+commonsCompress = "1.27.1"
+# Box: Image loading
+coilCompose = "2.7.0"
+# Box: Document access
+documentfile = "1.1.0"
+# Box: Camera video
+cameraVideo = "1.6.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -75,15 +95,14 @@ com-google-code-gson = { group = "com.google.code.gson", name = "gson", version.
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleProcess" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit"}
 litertlm = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertlm" }
+litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }
 commonmark = { group = "com.halilibo.compose-richtext", name = "richtext-commonmark", version.ref = "commonmark" }
 richtext = { group = "com.halilibo.compose-richtext", name = "richtext-ui-material3", version.ref = "richtext" }
-tflite = { group = "com.google.android.gms", name = "play-services-tflite-java", version.ref = "playServicesTfliteJava" }
-tflite-gpu = { group = "com.google.android.gms", name = "play-services-tflite-gpu", version.ref = "playServicesTfliteGpu" }
-tflite-support = { group = "com.google.android.gms", name = "play-services-tflite-support", version.ref = "playServicesTfliteJava" }
 camerax-core = { group = "androidx.camera", name = "camera-core", version.ref = "cameraX"}
 camerax-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "cameraX"}
 camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "cameraX"}
 camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = "cameraX"}
+camerax-video = { group = "androidx.camera", name = "camera-video", version.ref = "cameraVideo"}
 openid-appauth = { group = "net.openid", name = "appauth", version.ref = "netOpenidAppauth" }
 androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
 protobuf-javalite = { group = "com.google.protobuf", name = "protobuf-javalite", version.ref = "protobufJavaLite" }
@@ -91,16 +110,21 @@ hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt"
 hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltNavigation" }
 hilt-android-testing = { module = "com.google.dagger:hilt-android-testing", version.ref = "hilt" }
 hilt-android-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
-play-services-oss-licenses = { module = "com.google.android.gms:play-services-oss-licenses", version.ref = "playServicesOssLicenses"}
-firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
-# When using the Firebase BoM, you don't specify versions in Firebase
-# library dependencies.
-firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
-firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
 moshi-kotlin = { group = "com.squareup.moshi", name = "moshi-kotlin", version.ref = "moshi" }
 moshi-kotlin-codegen = { group = "com.squareup.moshi", name = "moshi-kotlin-codegen", version.ref = "moshi" }
 mlkit-genai-prompt = { group = "com.google.mlkit", name = "genai-prompt", version.ref = "mlkit-genai-prompt" }
+mlkit-genai-image-description = { group = "com.google.mlkit", name = "genai-image-description", version.ref = "mlkit-genai-image-description" }
+mlkit-genai-proofreading = { group = "com.google.mlkit", name = "genai-proofreading", version.ref = "mlkit-genai-proofreading" }
+mlkit-genai-rewriting = { group = "com.google.mlkit", name = "genai-rewriting", version.ref = "mlkit-genai-rewriting" }
+mlkit-genai-summarization = { group = "com.google.mlkit", name = "genai-summarization", version.ref = "mlkit-genai-summarization" }
+mlkit-genai-speech = { group = "com.google.mlkit", name = "genai-speech-recognition", version.ref = "mlkit-genai-speech" }
+mlkit-barcode = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkit-barcode" }
+mlkit-face-detection = { group = "com.google.mlkit", name = "face-detection", version.ref = "mlkit-face-detection" }
+mlkit-face-mesh = { group = "com.google.mlkit", name = "face-mesh-detection", version.ref = "mlkit-face-mesh" }
+mlkit-image-labeling = { group = "com.google.mlkit", name = "image-labeling", version.ref = "mlkit-image-labeling" }
+mlkit-pose-detection = { group = "com.google.mlkit", name = "pose-detection", version.ref = "mlkit-pose-detection" }
+mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkit-text-recognition" }
 # Box: Biometric authentication
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 # Box: Encrypted Room database
@@ -112,6 +136,21 @@ sqlite = { group = "androidx.sqlite", name = "sqlite-ktx", version.ref = "sqlite
 # Box: Material 3 adaptive navigation
 androidx-material3-adaptive-navigation-suite = { group = "androidx.compose.material3", name = "material3-adaptive-navigation-suite", version.ref = "material3AdaptiveNavSuite" }
 androidx-material3-window-size = { group = "androidx.compose.material3", name = "material3-window-size-class", version.ref = "material3WindowSize" }
+# Box: Networking & MCP
+ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
+ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
+ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
+mcp-kotlin-sdk = { group = "io.modelcontextprotocol", name = "kotlin-sdk", version.ref = "mcpSdk" }
+# Box: KaTeX
+katex-core = { group = "io.github.darriousliu", name = "katex-core", version.ref = "katexCore" }
+# Box: PDF / compression
+pdfbox-android = { group = "com.tom-roush", name = "pdfbox-android", version.ref = "pdfboxAndroid" }
+commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
+# Box: Image loading
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
+# Box: Document access
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -120,6 +159,4 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "serializationPlugin" }
 protobuf = {id = "com.google.protobuf", version.ref = "protobuf"}
 hilt-application = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
-oss-licenses = {id = "com.google.android.gms.oss-licenses-plugin", version.ref = "ossLicenses"}
-google-services = { id = "com.google.gms.google-services", version.ref = "googleService" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

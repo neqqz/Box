@@ -21,7 +21,6 @@ import com.google.ai.edge.gallery.data.DataStoreRepository
 import com.google.ai.edge.gallery.security.OfflineMode
 import com.google.ai.edge.gallery.security.SecurityAuditLog
 import com.google.ai.edge.gallery.ui.theme.ThemeSettings
-import com.google.firebase.FirebaseApp
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -33,10 +32,8 @@ class GalleryApplication : Application() {
   override fun onCreate() {
     super.onCreate()
 
-    // Load saved theme.
-    ThemeSettings.themeOverride.value = dataStoreRepository.readTheme()
-
-    FirebaseApp.initializeApp(this)
+    // Load saved theme, palette, and font settings.
+    ThemeSettings.initFromPrefs(this, dataStoreRepository.readTheme())
 
     // Box: Initialize offline mode from saved preference
     OfflineMode.init(this)

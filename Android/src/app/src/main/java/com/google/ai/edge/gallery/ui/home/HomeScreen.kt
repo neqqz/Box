@@ -159,7 +159,13 @@ private object HomeScreenDestination {
   @StringRes val titleRes = R.string.app_name
 }
 
-private val PREDEFINED_CATEGORY_ORDER = listOf(Category.LLM.id, Category.EXPERIMENTAL.id)
+private val PREDEFINED_CATEGORY_ORDER =
+  listOf(
+    Category.LLM.id,
+    Category.IMAGE_GEN.id,
+    Category.VOICE.id,
+    Category.EXPERIMENTAL.id,
+  )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
