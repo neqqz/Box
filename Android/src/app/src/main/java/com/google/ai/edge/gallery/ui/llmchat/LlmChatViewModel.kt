@@ -97,6 +97,12 @@ open class LlmChatViewModelBase() : ChatViewModel() {
    * Box: Look up the most recent conversation for a model (for auto-resume).
    */
   suspend fun getLatestConversationForModel(modelName: String): com.google.ai.edge.gallery.data.local.entities.Conversation? {
+    if (::applicationContext.isInitialized) {
+      val restoreMemory = applicationContext
+        .getSharedPreferences("box_settings", Context.MODE_PRIVATE)
+        .getBoolean("chat_restore_memory", true)
+      if (!restoreMemory) return null
+    }
     return try {
       chatRepository.getLatestConversationForModel(modelName)
     } catch (e: Exception) {
@@ -266,6 +272,7 @@ open class LlmChatViewModelBase() : ChatViewModel() {
       }
 
       var firstRun = true
+      var chunkCount = 0
       val start = System.currentTimeMillis()
 
       try {
@@ -345,11 +352,30 @@ open class LlmChatViewModelBase() : ChatViewModel() {
                 }
 
                 // Incrementally update the streamed partial results.
+                if (partialResult.isNotEmpty()) {
+                  chunkCount++
+                }
                 val latencyMs: Long = if (done) System.currentTimeMillis() - start else -1
-                if (partialResult.isNotEmpty() || wasLoading || done) {
+                val showTps =
+                  done &&
+                    chunkCount > 2 &&
+                    latencyMs > 0 &&
+                    ::applicationContext.isInitialized &&
+                    applicationContext
+                      .getSharedPreferences("box_settings", Context.MODE_PRIVATE)
+                      .getBoolean("chat_show_tps", false)
+                val finalPartial =
+                  if (showTps) {
+                    val tps = chunkCount * 1000.0 / latencyMs
+                    val sec = latencyMs / 1000.0
+                    "$partialResult\n\n_${String.format("%.1f", tps)} tok/s · ${String.format("%.1f", sec)}s_"
+                  } else {
+                    partialResult
+                  }
+                if (finalPartial.isNotEmpty() || wasLoading || done) {
                   updateLastTextMessageContentIncrementally(
                     model = model,
-                    partialContent = partialResult,
+                    partialContent = finalPartial,
                     latencyMs = latencyMs.toFloat(),
                   )
                 }

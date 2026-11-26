@@ -490,12 +490,29 @@ private fun BoxAssistScreen(
     if (!hasCameraPerm) camPermLauncher.launch(Manifest.permission.CAMERA)
   }
 
+  val assistPrefs = remember {
+    context.getSharedPreferences("box_settings", Context.MODE_PRIVATE)
+  }
+  val assistSpeechRate = remember { assistPrefs.getFloat("boxassist_speech_rate", 0.0f) }
+  val assistTtsVoice = remember { assistPrefs.getString("tts_voice_name", null) }
+  val assistHazardsOnly = remember { assistPrefs.getBoolean("boxassist_hazards_only", false) }
+  val assistHaptics = remember { assistPrefs.getBoolean("boxassist_haptics", true) }
+  val assistScoreThreshold = remember { assistPrefs.getFloat("boxassist_score_threshold", 0.3f) }
+  val hapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
+
   var ttsReady by remember { mutableStateOf(false) }
   val tts = remember {
     var instance: TextToSpeech? = null
     instance = TextToSpeech(context) { st ->
       if (st == TextToSpeech.SUCCESS) {
         instance?.language = Locale.US
+        if (assistSpeechRate > 0.01f) {
+          instance?.setSpeechRate(assistSpeechRate)
+        }
+        if (!assistTtsVoice.isNullOrBlank()) {
+          val matched = instance?.voices?.firstOrNull { it.name == assistTtsVoice }
+          if (matched != null) instance?.voice = matched
+        }
         ttsReady = true
       }
     }
@@ -703,12 +720,22 @@ private fun BoxAssistScreen(
                           latestFrame = bmp
                           frameSize = bmp.width to bmp.height
                           scope.launch {
-                            val res = engine.detectAndEstimateDepth(bmp)
+                            val rawRes = engine.detectAndEstimateDepth(bmp, confThreshold = assistScoreThreshold)
+                            val hazardLabels = setOf(
+                              "person", "bicycle", "car", "motorcycle", "bus", "train", "truck",
+                              "traffic light", "stop sign", "fire hydrant", "dog", "chair", "bench"
+                            )
+                            val res = if (assistHazardsOnly) rawRes.filter { it.label in hazardLabels } else rawRes
                             detections = res
                             val t = System.currentTimeMillis()
                             if (res.isNotEmpty() && t - lastLiveSpokenAt >= 2600L) {
                               lastLiveSpokenAt = t
                               val top = res.first()
+                              if (assistHaptics && top.depthBand == DepthBand.VERY_CLOSE) {
+                                hapticFeedback.performHapticFeedback(
+                                  androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+                                )
+                              }
                               val article = if (top.label.firstOrNull()?.lowercaseChar() in listOf('a', 'e', 'i', 'o', 'u')) "an" else "a"
                               val phrase = buildString {
                                 append(article).append(' ').append(top.label)

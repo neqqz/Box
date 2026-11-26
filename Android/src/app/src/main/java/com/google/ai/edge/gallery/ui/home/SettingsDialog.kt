@@ -1091,6 +1091,25 @@ private fun BoxAssistSettingsSection(context: Context) {
   var hazardsOnly by remember { mutableStateOf(prefs.getBoolean("boxassist_hazards_only", false)) }
   var haptics by remember { mutableStateOf(prefs.getBoolean("boxassist_haptics", true)) }
   var threshold by remember { mutableFloatStateOf(prefs.getFloat("boxassist_score_threshold", 0.3f)) }
+  var selectedVoice by remember { mutableStateOf(prefs.getString("tts_voice_name", null) ?: "") }
+  var availableVoices by remember { mutableStateOf<List<String>>(emptyList()) }
+
+  androidx.compose.runtime.DisposableEffect(context) {
+    var ttsInstance: android.speech.tts.TextToSpeech? = null
+    ttsInstance = android.speech.tts.TextToSpeech(context) { status ->
+      if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+        val names = ttsInstance?.voices
+          ?.filter { !it.isNetworkConnectionRequired }
+          ?.map { it.name }
+          ?.sorted()
+          ?: emptyList()
+        availableVoices = names
+      }
+    }
+    onDispose {
+      runCatching { ttsInstance.shutdown() }
+    }
+  }
 
   Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
     Text(
@@ -1098,6 +1117,23 @@ private fun BoxAssistSettingsSection(context: Context) {
       style = MaterialTheme.typography.labelSmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    if (availableVoices.isNotEmpty()) {
+      val voiceOptions = listOf("System default") + availableVoices
+      DropdownPicker(
+        label = "Voice",
+        options = voiceOptions,
+        selected = selectedVoice.ifBlank { "System default" },
+        onSelect = { idx ->
+          if (idx == 0) {
+            selectedVoice = ""
+            prefs.edit().remove("tts_voice_name").apply()
+          } else {
+            selectedVoice = availableVoices[idx - 1]
+            prefs.edit().putString("tts_voice_name", selectedVoice).apply()
+          }
+        },
+      )
+    }
     Column {
       Text(
         if (speechRate <= 0.01f) "Speech rate: System" else "Speech rate: ${String.format("%.2f", speechRate)}×",

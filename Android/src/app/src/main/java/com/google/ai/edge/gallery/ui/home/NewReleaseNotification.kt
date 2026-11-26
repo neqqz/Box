@@ -62,6 +62,7 @@ fun NewReleaseNotification() {
   var newReleaseVersion by remember { mutableStateOf("") }
   var newReleaseUrl by remember { mutableStateOf("") }
   val lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current
+  val context = androidx.compose.ui.platform.LocalContext.current
   val coroutineScope = rememberCoroutineScope()
 
   DisposableEffect(lifecycleOwner) {
@@ -70,7 +71,11 @@ fun NewReleaseNotification() {
       // Log or perform actions based on the lifecycle event.
       when (event) {
         Lifecycle.Event.ON_RESUME -> {
-          coroutineScope.launch {
+          val autoUpdate =
+            context.getSharedPreferences("box_settings", android.content.Context.MODE_PRIVATE)
+              .getBoolean("auto_update_check", true)
+          if (autoUpdate) {
+            coroutineScope.launch {
             withContext(Dispatchers.IO) {
               Log.d(TAG, "Checking for new release...")
               val info =
@@ -86,6 +91,7 @@ fun NewReleaseNotification() {
                 }
               }
             }
+          }
           }
         }
 
