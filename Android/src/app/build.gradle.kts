@@ -91,6 +91,7 @@ android {
   packaging {
     jniLibs {
       useLegacyPackaging = true
+      pickFirsts += "lib/**/libLiteRt.so"
     }
   }
   compileOptions {
