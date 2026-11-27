@@ -274,6 +274,7 @@ fun ChatView(
         allowEditingSystemPrompt = allowEditingSystemPrompt,
         curSystemPrompt = curSystemPrompt,
         onSystemPromptChanged = onSystemPromptChanged,
+        useThemeColor = true,
       )
     },
   ) { innerPadding ->

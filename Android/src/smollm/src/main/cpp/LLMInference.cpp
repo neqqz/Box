@@ -91,8 +91,11 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = contextSize;
-    ctx_params.n_batch = std::min<uint32_t>(ctx_params.n_ctx, 2048);
-    ctx_params.n_ubatch = 512;
+    // Cap GPU batch/ubatch to prevent kgsl-3d0 gpu timeout / vk::DeviceLostError on Adreno.
+    ctx_params.n_batch = (nGpuLayers > 0)
+        ? std::min<uint32_t>(ctx_params.n_ctx, 512)
+        : std::min<uint32_t>(ctx_params.n_ctx, 2048);
+    ctx_params.n_ubatch = (nGpuLayers > 0) ? 128 : 512;
     // On GPU let llama.cpp probe FA support; forcing it makes unsupported ops fall back to CPU on GPU-resident tensors.
     ctx_params.flash_attn_type = (nGpuLayers > 0) ? LLAMA_FLASH_ATTN_TYPE_AUTO : LLAMA_FLASH_ATTN_TYPE_ENABLED;
     ctx_params.n_threads = nThreads;

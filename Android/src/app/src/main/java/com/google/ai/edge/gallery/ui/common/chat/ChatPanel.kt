@@ -666,11 +666,12 @@ private suspend fun scrollToBottom(listState: LazyListState, animate: Boolean = 
 
 @Composable
 private fun InitializingDotsRow() {
+  val baseColor = MaterialTheme.colorScheme.onSurface
   val palette =
     listOf(
-      MaterialTheme.colorScheme.primary,
-      MaterialTheme.colorScheme.secondary,
-      MaterialTheme.colorScheme.tertiary,
+      baseColor.copy(alpha = 0.95f),
+      baseColor.copy(alpha = 0.55f),
+      baseColor.copy(alpha = 0.30f),
     )
   val transition = rememberInfiniteTransition(label = "init_dots")
   val colorPhase by
@@ -719,11 +720,12 @@ private fun InitializingDotsRow() {
 
 @Composable
 private fun InitializingPixelText(text: String, style: TextStyle) {
+  val baseColor = MaterialTheme.colorScheme.onSurface
   val palette =
     listOf(
-      MaterialTheme.colorScheme.primary,
-      MaterialTheme.colorScheme.secondary,
-      MaterialTheme.colorScheme.tertiary,
+      baseColor.copy(alpha = 0.95f),
+      baseColor.copy(alpha = 0.65f),
+      baseColor.copy(alpha = 0.40f),
     )
   val transition = rememberInfiniteTransition(label = "init_text")
   val phase by

@@ -67,6 +67,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.Close
@@ -76,6 +78,7 @@ import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Photo
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -195,6 +198,12 @@ fun MessageInputText(
   var hasFrontCamera by remember { mutableStateOf(false) }
   val sensorObserver = remember { SensorObserver(context) }
   var pendingDocument by remember { mutableStateOf<Pair<String, String>?>(null) }
+  var voiceReplyEnabled by remember {
+    mutableStateOf(
+      context.getSharedPreferences("box_settings", android.content.Context.MODE_PRIVATE)
+        .getBoolean("voice_reply_enabled", false)
+    )
+  }
 
   val updatePickedImages: (List<Bitmap>) -> Unit = { bitmaps ->
     val isAiCore = modelManagerUiState.selectedModel.runtimeType == RuntimeType.AICORE
@@ -494,43 +503,6 @@ fun MessageInputText(
                             (imageCount + pickedImages.size) >= MAX_IMAGE_COUNT_AI_CORE
                         val enableAddImageMenuItems =
                           (imageCount + pickedImages.size) < MAX_IMAGE_COUNT
-                        // Take a picture.
-                        DropdownMenuItem(
-                          text = {
-                            Row(
-                              verticalAlignment = Alignment.CenterVertically,
-                              horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                              Icon(Icons.Rounded.PhotoCamera, contentDescription = null)
-                              Text("Take a picture")
-                            }
-                          },
-                          enabled = enableAddImageMenuItems,
-                          onClick = {
-                            if (isImageLimitExceededForAiCore) {
-                              onImageLimitExceeded()
-                              showAddContentMenu = false
-                              return@DropdownMenuItem
-                            }
-                            // Check permission
-                            when (PackageManager.PERMISSION_GRANTED) {
-                              // Already got permission. Call the lambda.
-                              ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.CAMERA,
-                              ) -> {
-                                showAddContentMenu = false
-                                showCameraCaptureBottomSheet = true
-                              }
-
-                              // Otherwise, ask for permission
-                              else -> {
-                                takePicturePermissionLauncher.launch(Manifest.permission.CAMERA)
-                              }
-                            }
-                          },
-                        )
-
                         // Pick an image from album.
                         DropdownMenuItem(
                           text = {
@@ -564,38 +536,6 @@ fun MessageInputText(
                       if (showAudioPicker) {
                         val enableRecordAudioClipMenuItems =
                           (audioClipMessageCount + pickedAudioClips.size) < MAX_AUDIO_CLIP_COUNT
-                        DropdownMenuItem(
-                          text = {
-                            Row(
-                              verticalAlignment = Alignment.CenterVertically,
-                              horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                              Icon(Icons.Rounded.Mic, contentDescription = null)
-                              Text("Record audio clip")
-                            }
-                          },
-                          enabled = enableRecordAudioClipMenuItems,
-                          onClick = {
-                            // Check permission
-                            when (PackageManager.PERMISSION_GRANTED) {
-                              // Already got permission. Call the lambda.
-                              ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.RECORD_AUDIO,
-                              ) -> {
-                                handleClickRecordAudioClip()
-                              }
-
-                              // Otherwise, ask for permission
-                              else -> {
-                                recordAudioClipsPermissionLauncher.launch(
-                                  Manifest.permission.RECORD_AUDIO
-                                )
-                              }
-                            }
-                          },
-                        )
-
                         DropdownMenuItem(
                           text = {
                             Row(
@@ -639,7 +579,7 @@ fun MessageInputText(
                               horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                               Icon(Icons.Rounded.AttachFile, contentDescription = null)
-                              Text("  Attach Document (PDF / TXT / MD)")
+                              Text("Attach document")
                             }
                           },
                           onClick = {
@@ -701,64 +641,135 @@ fun MessageInputText(
                   }
                 }
 
-                // Stop button.
-                if (inProgress && showStopButtonWhenInProgress) {
-                  if (!modelInitializing && !modelPreparing) {
-                    IconButton(
-                      onClick = onStopButtonClicked,
-                      colors =
-                        IconButtonDefaults.iconButtonColors(
-                          containerColor = MaterialTheme.colorScheme.secondaryContainer
-                        ),
-                    ) {
-                      Icon(
-                        Icons.Rounded.Stop,
-                        contentDescription = stringResource(R.string.cd_stop_icon),
-                        tint = MaterialTheme.colorScheme.primary,
-                      )
-                    }
-                  }
-                }
-                // Send button.
-                else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  // Mic (voice input / audio clip).
                   IconButton(
-                    enabled =
-                      !inProgress &&
-                        !isResettingSession &&
-                        (curMessage.isNotEmpty() || pickedAudioClips.isNotEmpty() || pendingDocument != null),
+                    enabled = !inProgress && !isResettingSession,
                     onClick = {
-                      val baseMessage = curMessage.trim()
-                      val doc = pendingDocument
-                      val fullText = if (doc != null) {
-                        val docBlock =
-                          "\n\n---\n📄 **Attached Document: ${doc.first}**\n```\n${doc.second}\n```\n---\n"
-                        if (baseMessage.isEmpty()) docBlock.trimStart('\n') else baseMessage + docBlock
-                      } else {
-                        baseMessage
+                      when (PackageManager.PERMISSION_GRANTED) {
+                        ContextCompat.checkSelfPermission(
+                          context,
+                          Manifest.permission.RECORD_AUDIO,
+                        ) -> {
+                          handleClickRecordAudioClip()
+                        }
+                        else -> {
+                          recordAudioClipsPermissionLauncher.launch(
+                            Manifest.permission.RECORD_AUDIO
+                          )
+                        }
                       }
-                      onSendMessage(
-                        createMessagesToSend(
-                          pickedImages = pickedImages,
-                          audioClips = pickedAudioClips,
-                          text = fullText,
-                        )
-                      )
-                      pickedImages = listOf()
-                      pickedAudioClips = listOf()
-                      pendingDocument = null
                     },
-                    colors =
-                      IconButtonDefaults.iconButtonColors(
-                        containerColor = getTaskIconColor(task = task),
-                        disabledContainerColor = getTaskIconColor(task = task).copy(alpha = 0.3f),
-                      ),
                   ) {
                     Icon(
-                      Icons.AutoMirrored.Rounded.Send,
-                      contentDescription = stringResource(R.string.cd_send_prompt_icon),
-                      modifier = Modifier.offset(x = 2.dp),
-                      tint = Color.White,
+                      Icons.Rounded.Mic,
+                      contentDescription = "Voice input toggle",
+                      tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                  }
+
+                  // Speaker (voice reply toggle).
+                  IconButton(
+                    onClick = {
+                      voiceReplyEnabled = !voiceReplyEnabled
+                      context
+                        .getSharedPreferences("box_settings", android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("voice_reply_enabled", voiceReplyEnabled)
+                        .apply()
+                    },
+                  ) {
+                    Icon(
+                      if (voiceReplyEnabled) Icons.AutoMirrored.Rounded.VolumeUp
+                      else Icons.AutoMirrored.Rounded.VolumeOff,
+                      contentDescription = "Voice reply toggle",
+                      tint =
+                        if (voiceReplyEnabled) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                  }
+
+                  // Camera.
+                  IconButton(
+                    enabled = !inProgress && !isResettingSession,
+                    onClick = {
+                      when (PackageManager.PERMISSION_GRANTED) {
+                        ContextCompat.checkSelfPermission(
+                          context,
+                          Manifest.permission.CAMERA,
+                        ) -> {
+                          showCameraCaptureBottomSheet = true
+                        }
+                        else -> {
+                          takePicturePermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
+                      }
+                    },
+                  ) {
+                    Icon(
+                      Icons.Rounded.Videocam,
+                      contentDescription = "Camera",
+                      tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                  }
+
+                  // Stop button.
+                  if (inProgress && showStopButtonWhenInProgress) {
+                    if (!modelInitializing && !modelPreparing) {
+                      IconButton(
+                        onClick = onStopButtonClicked,
+                        colors =
+                          IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                          ),
+                      ) {
+                        Icon(
+                          Icons.Rounded.Stop,
+                          contentDescription = stringResource(R.string.cd_stop_icon),
+                          tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        )
+                      }
+                    }
+                  }
+                  // Send button.
+                  else {
+                    val canSend =
+                      !inProgress &&
+                        !isResettingSession &&
+                        (curMessage.isNotEmpty() || pickedAudioClips.isNotEmpty() || pendingDocument != null)
+                    IconButton(
+                      enabled = canSend,
+                      onClick = {
+                        val baseMessage = curMessage.trim()
+                        val doc = pendingDocument
+                        val fullText = if (doc != null) {
+                          val docBlock =
+                            "\n\n---\n📄 **Attached Document: ${doc.first}**\n```\n${doc.second}\n```\n---\n"
+                          if (baseMessage.isEmpty()) docBlock.trimStart('\n') else baseMessage + docBlock
+                        } else {
+                          baseMessage
+                        }
+                        onSendMessage(
+                          createMessagesToSend(
+                            pickedImages = pickedImages,
+                            audioClips = pickedAudioClips,
+                            text = fullText,
+                          )
+                        )
+                        pickedImages = listOf()
+                        pickedAudioClips = listOf()
+                        pendingDocument = null
+                      },
+                    ) {
+                      Icon(
+                        Icons.AutoMirrored.Rounded.Send,
+                        contentDescription = stringResource(R.string.cd_send_prompt_icon),
+                        modifier = Modifier.offset(x = 2.dp),
+                        tint =
+                          if (canSend) MaterialTheme.colorScheme.onSurface
+                          else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                      )
+                    }
                   }
                 }
               }

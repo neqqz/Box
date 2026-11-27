@@ -112,7 +112,6 @@ import com.google.ai.edge.gallery.ui.theme.CatppuccinAccent
 import com.google.ai.edge.gallery.ui.theme.CatppuccinFlavor
 import com.google.ai.edge.gallery.ui.theme.CustomThemeType
 import com.google.ai.edge.gallery.ui.theme.DraculaAccent
-import com.google.ai.edge.gallery.ui.theme.PressStart2PFontFamily
 import com.google.ai.edge.gallery.ui.theme.PtyxisExtendedPalette
 import com.google.ai.edge.gallery.ui.theme.PtyxisPalette
 import com.google.ai.edge.gallery.ui.theme.ThemeSettings
@@ -246,7 +245,7 @@ fun SettingsDialog(
         Column {
           Text(
             "Settings",
-            style = MaterialTheme.typography.titleLarge.copy(fontFamily = PressStart2PFontFamily),
+            style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(bottom = 8.dp),
           )
           Text(
@@ -262,7 +261,7 @@ fun SettingsDialog(
           verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
           val context = LocalContext.current
-          var expandAppearance by remember { mutableStateOf(true) }
+          var expandAppearance by remember { mutableStateOf(false) }
           var expandSecurity by remember { mutableStateOf(false) }
           var expandNetwork by remember { mutableStateOf(false) }
           var expandChat by remember { mutableStateOf(false) }
