@@ -1,7 +1,6 @@
 #include "LLMInference.h"
 #include "ggml-backend.h"
 #include <android/log.h>
-#include <cstdlib>
 #include <jni.h>
 #include <string>
 
@@ -10,9 +9,6 @@
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_jegly_offlineLLM_smollm_SmolLM_initBackends(JNIEnv* env, jobject /*unused*/, jstring nativeLibDir) {
-    // Work around Adreno Vulkan driver shader-linking crashes in ggml_vk_mul_mat.
-    setenv("GGML_VK_DISABLE_COOPMAT", "1", 1);
-    setenv("GGML_VK_DISABLE_F16", "1", 1);
     const char* dirCstr = nativeLibDir ? env->GetStringUTFChars(nativeLibDir, nullptr) : nullptr;
     if (dirCstr && dirCstr[0] != '\0') {
         ggml_backend_load_all_from_path(dirCstr);

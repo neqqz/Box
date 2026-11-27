@@ -2,7 +2,6 @@ package com.google.ai.edge.gallery.runtime
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.os.Build
 import android.util.Log
 import com.google.ai.edge.gallery.data.Accelerator
 import com.google.ai.edge.gallery.data.ConfigKeys
@@ -47,16 +46,11 @@ object LlamaCppModelHelper : LlmModelHelper {
             key = ConfigKeys.ACCELERATOR, defaultValue = Accelerator.CPU.label
         )
         val prefs = context.getSharedPreferences("box_settings", Context.MODE_PRIVATE)
-        // shortcut: ggml-vulkan segfaults on Adreno ("Failed to link shaders"), so Qualcomm stays on
-        // CPU unless llama_force_vulkan is set; revisit once llama.cpp's Adreno Vulkan path is stable.
-        val isQualcomm = Build.SOC_MANUFACTURER.equals("QTI", ignoreCase = true) ||
-            Build.SOC_MANUFACTURER.equals("Qualcomm", ignoreCase = true)
-        val useVulkan = accelerator == Accelerator.GPU.label &&
-            (!isQualcomm || prefs.getBoolean("llama_force_vulkan", false))
-        if (accelerator == Accelerator.GPU.label && !useVulkan) {
-            Log.w(TAG, "Vulkan offload disabled on Qualcomm SoC, falling back to CPU")
+        val nGpuLayers = if (accelerator == Accelerator.GPU.label) {
+            prefs.getInt("llama_gpu_layers", 99)
+        } else {
+            0
         }
-        val nGpuLayers = if (useVulkan) prefs.getInt("llama_gpu_layers", 99) else 0
 
         val modelPath = model.getPath(context = context)
         Log.d(TAG, "Initializing llama.cpp engine for: $modelPath (nGpuLayers=$nGpuLayers)")
