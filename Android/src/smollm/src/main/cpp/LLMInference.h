@@ -2,7 +2,6 @@
 #define LLMINFERENCE_H
 
 #include "llama.h"
-#include "common.h"
 #include "ggml.h"
 #include <string>
 #include <vector>

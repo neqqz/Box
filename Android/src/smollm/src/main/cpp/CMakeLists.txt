@@ -79,7 +79,7 @@ function(build_library target_name)
     )
     target_link_libraries(
             ${target_name}
-            android log llama llama-common
+            android log llama
     )
     target_link_options(
             ${target_name}

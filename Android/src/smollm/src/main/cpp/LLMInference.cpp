@@ -12,6 +12,34 @@
 #define LOGi(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGe(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
+static std::vector<llama_token> tokenize_text(const llama_vocab * vocab, const std::string & text, bool add_special, bool parse_special) {
+    int n_tokens = static_cast<int>(text.length()) + 2 * add_special;
+    std::vector<llama_token> result(n_tokens);
+    n_tokens = llama_tokenize(vocab, text.data(), static_cast<int32_t>(text.size()), result.data(), static_cast<int32_t>(result.size()), add_special, parse_special);
+    if (n_tokens < 0) {
+        result.resize(-n_tokens);
+        int check = llama_tokenize(vocab, text.data(), static_cast<int32_t>(text.size()), result.data(), static_cast<int32_t>(result.size()), add_special, parse_special);
+        if (check < 0) result.clear();
+    } else {
+        result.resize(n_tokens);
+    }
+    return result;
+}
+
+static std::string token_to_piece(const llama_context * ctx, llama_token token, bool special) {
+    const llama_vocab * vocab = llama_model_get_vocab(llama_get_model(ctx));
+    std::string piece(8, '\0');
+    int n_chars = llama_token_to_piece(vocab, token, piece.data(), static_cast<int32_t>(piece.size()), 0, special);
+    if (n_chars < 0) {
+        piece.resize(-n_chars);
+        n_chars = llama_token_to_piece(vocab, token, piece.data(), static_cast<int32_t>(piece.size()), 0, special);
+        if (n_chars < 0) return "";
+    } else {
+        piece.resize(n_chars);
+    }
+    return piece;
+}
+
 void
 LLMInference::loadModel(const char *model_path, float minP, float temperature, float topP, int topK,
                         float repeatPenalty, bool storeChats, long contextSize,
@@ -161,7 +189,7 @@ LLMInference::prewarmHistory() {
     if (new_len <= 0) return;
 
     std::string prompt(_formattedMessages.begin(), _formattedMessages.begin() + new_len);
-    std::vector<llama_token> tokens = common_tokenize(llama_model_get_vocab(_model), prompt, true, true);
+    std::vector<llama_token> tokens = tokenize_text(llama_model_get_vocab(_model), prompt, true, true);
     if (tokens.empty()) return;
     if (tokens.size() >= llama_n_ctx(_ctx)) {
         LOGi("prewarmHistory: history would exceed context; leaving prefill to first send");
@@ -201,7 +229,7 @@ LLMInference::startCompletion(const char *query) {
     
     std::string queryString(query);
     if (queryString.find("<turn|") != std::string::npos || queryString.find("<start_of_turn>") != std::string::npos) {
-         _promptTokens = common_tokenize(llama_model_get_vocab(_model), queryString, true, true);
+         _promptTokens = tokenize_text(llama_model_get_vocab(_model), queryString, true, true);
     } else {
         addChatMessage(query, "user");
 
@@ -233,10 +261,10 @@ LLMInference::startCompletion(const char *query) {
             }
             fallback << _assistantRole << ":";
             std::string prompt = fallback.str();
-            _promptTokens = common_tokenize(llama_model_get_vocab(_model), prompt, true, true);
+            _promptTokens = tokenize_text(llama_model_get_vocab(_model), prompt, true, true);
         } else {
             std::string prompt(_formattedMessages.begin(), _formattedMessages.begin() + new_len);
-            _promptTokens = common_tokenize(llama_model_get_vocab(_model), prompt, true, true);
+            _promptTokens = tokenize_text(llama_model_get_vocab(_model), prompt, true, true);
         }
     }
 
@@ -293,7 +321,7 @@ LLMInference::completionLoop() {
     // Check if token is EOG or if the text so far contains stop markers
     bool is_eog = llama_vocab_is_eog(llama_model_get_vocab(_model), _currToken);
     
-    std::string piece = common_token_to_piece(_ctx, _currToken, true);
+    std::string piece = token_to_piece(_ctx, _currToken, true);
     
     // Check for stop sequences in the cumulative response
     static const std::vector<std::string> stop_sequences = {
