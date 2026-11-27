@@ -93,6 +93,7 @@ fun MessageBodyConfigUpdate(message: ChatMessageConfigValuesChange) {
       }
     }
 
+  val fg = MaterialTheme.colorScheme.onTertiaryContainer
   Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
     Box(
       modifier =
@@ -114,7 +115,8 @@ fun MessageBodyConfigUpdate(message: ChatMessageConfigValuesChange) {
               Text(
                 "${rowData.label}:",
                 style = bodySmallNarrow,
-                modifier = Modifier.alpha(0.6f),
+                color = fg,
+                modifier = Modifier.alpha(0.7f),
                 maxLines = 1,
                 overflow = TextOverflow.MiddleEllipsis,
               )
@@ -127,7 +129,7 @@ fun MessageBodyConfigUpdate(message: ChatMessageConfigValuesChange) {
           Column {
             for (rowData in configRows) {
               if (!rowData.isChanged) {
-                Text(rowData.newValueDisplay, style = bodySmallNarrow, maxLines = 1)
+                Text(rowData.newValueDisplay, style = bodySmallNarrow, color = fg, maxLines = 1)
               } else {
                 val annotatedString = buildAnnotatedString {
                   withStyle(style = bodySmallNarrow.toSpanStyle()) {
@@ -141,12 +143,11 @@ fun MessageBodyConfigUpdate(message: ChatMessageConfigValuesChange) {
                       bodySmallNarrow
                         .copy(fontWeight = FontWeight.Bold)
                         .toSpanStyle()
-                        .copy(color = MaterialTheme.colorScheme.primary)
                   ) {
                     append(rowData.newValueDisplay)
                   }
                 }
-                Text(annotatedString, maxLines = 1, lineHeight = 12.sp)
+                Text(annotatedString, color = fg, maxLines = 1, lineHeight = 12.sp)
               }
             }
           }
