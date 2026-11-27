@@ -371,7 +371,7 @@ fun GalleryTheme(content: @Composable () -> Unit) {
     tabHeaderBgColor = colorScheme.primary,
     taskCardBgColor = if (darkTheme) colorScheme.surfaceContainerHigh else colorScheme.surfaceContainerLowest,
     taskIconShapeBgColor = colorScheme.primaryContainer,
-    userBubbleBgColor = colorScheme.primaryContainer,
+    userBubbleBgColor = if (darkTheme) androidx.compose.ui.graphics.lerp(colorScheme.surfaceContainerHigh, colorScheme.primary, 0.25f) else colorScheme.primary,
     agentBubbleBgColor = colorScheme.surfaceContainerHigh,
     linkColor = colorScheme.primary,
     successColor = colorScheme.tertiary,
