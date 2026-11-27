@@ -639,7 +639,7 @@ fun MessageInputText(
                               horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                               Icon(Icons.Rounded.AttachFile, contentDescription = null)
-                              Text("Attach document")
+                              Text("  Attach Document (PDF / TXT / MD)")
                             }
                           },
                           onClick = {
@@ -661,6 +661,7 @@ fun MessageInputText(
                                     "text/javascript",
                                     "text/x-java-source",
                                     "text/x-kotlin",
+                                    "application/pdf",
                                   ),
                                 )
                                 putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
@@ -1155,10 +1156,31 @@ private fun createMessagesToSend(
 
 private fun readDocumentContent(context: Context, uri: Uri): Pair<String, String>? {
   val filename = resolveDocumentFilename(context, uri)
-  val content = context.contentResolver.openInputStream(uri)?.use { stream ->
-    val text = stream.bufferedReader(Charsets.UTF_8).readText()
-    if (text.length > 50_000) text.take(50_000) + "\n\n[Content truncated due to length]" else text
+  val mime = context.contentResolver.getType(uri)
+  val isPdf = mime.equals("application/pdf", ignoreCase = true) ||
+    filename.endsWith(".pdf", ignoreCase = true)
+  val rawText = if (isPdf) {
+    try {
+      com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(context)
+      context.contentResolver.openInputStream(uri)?.use { stream ->
+        com.tom_roush.pdfbox.pdmodel.PDDocument.load(stream).use { doc ->
+          com.tom_roush.pdfbox.text.PDFTextStripper().getText(doc)
+        }
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to extract PDF text", e)
+      null
+    }
+  } else {
+    context.contentResolver.openInputStream(uri)?.use { stream ->
+      stream.bufferedReader(Charsets.UTF_8).readText()
+    }
   } ?: return null
+  val content = when {
+    isPdf && rawText.isBlank() -> "[This PDF appears to be a scanned image — no text could be extracted.]"
+    rawText.length > 50_000 -> rawText.take(50_000) + "\n\n[Content truncated due to length]"
+    else -> rawText
+  }
   return Pair(filename, content)
 }
 
