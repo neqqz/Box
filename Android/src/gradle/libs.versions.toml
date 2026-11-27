@@ -24,7 +24,7 @@ litertlm = "0.11.0"
 litert = "2.3.0"
 commonmark = "1.0.0-alpha05"
 richtext = "1.0.0-alpha05"
-cameraX = "1.6.2"
+cameraX = "1.7.0"
 netOpenidAppauth = "0.11.1"
 splashscreen = "1.2.0"
 hilt = "2.60.1"
@@ -47,9 +47,9 @@ mlkit-image-labeling = "17.0.9"
 mlkit-pose-detection = "18.0.0-beta5"
 mlkit-text-recognition = "16.0.1"
 # Box: Security & persistence
-biometric = "1.2.0-alpha05"
+biometric = "1.4.0-rc01"
 room = "2.8.5"
-sqlcipher = "4.6.1"
+sqlcipher = "4.20.0"
 sqlite = "2.7.1"
 # Box: Material 3 adaptive
 material3AdaptiveNavSuite = "1.5.0-rc01"
@@ -61,13 +61,13 @@ mcpSdk = "0.16.0"
 katexCore = "0.3.3"
 # Box: PDF / compression
 pdfboxAndroid = "2.0.27.0"
-commonsCompress = "1.27.1"
+commonsCompress = "1.28.0"
 # Box: Image loading
 coilCompose = "2.7.0"
 # Box: Document access
 documentfile = "1.1.0"
 # Box: Camera video
-cameraVideo = "1.6.2"
+cameraVideo = "1.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
