@@ -93,10 +93,12 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
     ctx_params.n_ctx = contextSize;
     ctx_params.n_batch = std::min<uint32_t>(ctx_params.n_ctx, 2048);
     ctx_params.n_ubatch = 512;
-    ctx_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
+    // On GPU let llama.cpp probe FA support; forcing it makes unsupported ops fall back to CPU on GPU-resident tensors.
+    ctx_params.flash_attn_type = (nGpuLayers > 0) ? LLAMA_FLASH_ATTN_TYPE_AUTO : LLAMA_FLASH_ATTN_TYPE_ENABLED;
     ctx_params.n_threads = nThreads;
     ctx_params.n_threads_batch = (nThreadsBatch > 0) ? nThreadsBatch : nThreads;
-    if (kvCacheQ8) {
+    // Q8 KV on Vulkan/Adreno hits CPU fallbacks (SIGSEGV in mul_mat), keep F16 when offloading.
+    if (kvCacheQ8 && nGpuLayers == 0) {
         ctx_params.type_k = GGML_TYPE_Q8_0;
         ctx_params.type_v = GGML_TYPE_Q8_0;
     }
