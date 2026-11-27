@@ -40,8 +40,15 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
     }
 
     llama_model_params model_params = llama_model_default_params();
-    model_params.use_mmap = useMmap;
-    model_params.use_mlock = useMlock;
+    if (useMmap && useMlock) {
+        model_params.load_mode = LLAMA_LOAD_MODE_MMAP_MLOCK;
+    } else if (useMmap) {
+        model_params.load_mode = LLAMA_LOAD_MODE_MMAP;
+    } else if (useMlock) {
+        model_params.load_mode = LLAMA_LOAD_MODE_MLOCK;
+    } else {
+        model_params.load_mode = LLAMA_LOAD_MODE_NONE;
+    }
     model_params.n_gpu_layers = nGpuLayers;
     _model = llama_model_load_from_file(model_path, model_params);
     if (!_model && nGpuLayers > 0) {
@@ -77,7 +84,8 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
     _sampler = llama_sampler_chain_init(sampler_params);
 
     if (repeatPenalty > 1.0f) {
-        llama_sampler_chain_add(_sampler, llama_sampler_init_penalties(256, repeatPenalty, 0.0f, 0.0f));
+        int32_t n_vocab = llama_vocab_n_tokens(llama_model_get_vocab(_model));
+        llama_sampler_chain_add(_sampler, llama_sampler_init_penalties(n_vocab, 256, repeatPenalty, 0.0f, 0.0f));
     }
 
     if (topK > 0) {
@@ -344,6 +352,19 @@ LLMInference::~LLMInference() {
     if (_sampler) llama_sampler_free(_sampler);
 }
 
+static inline void batch_clear(llama_batch & batch) {
+    batch.n_tokens = 0;
+}
+
+static inline void batch_add(llama_batch & batch, llama_token id, llama_pos pos, llama_seq_id seq_id, bool logits) {
+    batch.token[batch.n_tokens] = id;
+    batch.pos[batch.n_tokens] = pos;
+    batch.n_seq_id[batch.n_tokens] = 1;
+    batch.seq_id[batch.n_tokens][0] = seq_id;
+    batch.logits[batch.n_tokens] = logits;
+    batch.n_tokens++;
+}
+
 std::string
 LLMInference::benchModel(int pp, int tg, int pl, int nr) {
     g_batch     = llama_batch_init(pp, 0, pl);
@@ -355,10 +376,10 @@ LLMInference::benchModel(int pp, int tg, int pl, int nr) {
     int i, j;
     int nri;
     for (nri = 0; nri < nr; nri++) {
-        common_batch_clear(g_batch);
+        batch_clear(g_batch);
         const int n_tokens = pp;
         for (i = 0; i < n_tokens; i++) {
-            common_batch_add(g_batch, 1, i, { 0 }, false);
+            batch_add(g_batch, 1, i, 0, false);
         }
         g_batch.logits[g_batch.n_tokens - 1] = true;
         llama_memory_clear(llama_get_memory(this->_ctx), false);
@@ -372,9 +393,9 @@ LLMInference::benchModel(int pp, int tg, int pl, int nr) {
         llama_memory_clear(llama_get_memory(this->_ctx), false);
         const auto t_tg_start = ggml_time_us();
         for (i = 0; i < tg; i++) {
-            common_batch_clear(g_batch);
+            batch_clear(g_batch);
             for (j = 0; j < pl; j++) {
-                common_batch_add(g_batch, 0, i, { j }, true);
+                batch_add(g_batch, 0, i, j, true);
             }
             if (llama_decode(this->_ctx, g_batch) != 0) {
                 LOGe("llama_decode() failed during text generation");
