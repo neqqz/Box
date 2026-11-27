@@ -244,7 +244,7 @@ class RestoreTask @Inject constructor() : CustomTask {
     Task(
       id = BuiltInTaskId.RESTORE,
       label = "Restore",
-      category = Category.EXPERIMENTAL,
+      category = Category.IMAGE_GEN,
       icon = Icons.Outlined.AutoAwesome,
       models =
         mutableListOf(

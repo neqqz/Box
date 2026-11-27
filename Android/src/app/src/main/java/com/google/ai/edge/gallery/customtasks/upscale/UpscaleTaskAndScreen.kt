@@ -298,7 +298,7 @@ class UpscaleTask @Inject constructor() : CustomTask {
     Task(
       id = BuiltInTaskId.UPSCALE,
       label = "Upscale",
-      category = Category.EXPERIMENTAL,
+      category = Category.IMAGE_GEN,
       icon = Icons.Outlined.HighQuality,
       models =
         mutableListOf(

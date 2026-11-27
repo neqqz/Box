@@ -266,7 +266,7 @@ class DewarpTask @Inject constructor() : CustomTask {
     Task(
       id = BuiltInTaskId.DEWARP,
       label = "Flatten",
-      category = Category.EXPERIMENTAL,
+      category = Category.IMAGE_GEN,
       icon = Icons.Outlined.DocumentScanner,
       models =
         mutableListOf(

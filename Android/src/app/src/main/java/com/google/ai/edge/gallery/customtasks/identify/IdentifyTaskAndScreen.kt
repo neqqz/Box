@@ -285,7 +285,7 @@ class IdentifyTask @Inject constructor() : CustomTask {
     Task(
       id = BuiltInTaskId.MOBILENET,
       label = "Identify",
-      category = Category.EXPERIMENTAL,
+      category = Category.IMAGE_GEN,
       icon = Icons.Outlined.ImageSearch,
       models =
         mutableListOf(

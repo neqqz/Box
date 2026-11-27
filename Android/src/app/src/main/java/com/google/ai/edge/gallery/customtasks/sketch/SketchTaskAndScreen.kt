@@ -201,7 +201,7 @@ class SketchTask @Inject constructor() : CustomTask {
     Task(
       id = BuiltInTaskId.SKETCH,
       label = "Sketch",
-      category = Category.EXPERIMENTAL,
+      category = Category.IMAGE_GEN,
       icon = Icons.Outlined.Brush,
       models =
         mutableListOf(

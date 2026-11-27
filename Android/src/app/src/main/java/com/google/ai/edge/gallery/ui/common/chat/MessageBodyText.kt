@@ -43,8 +43,8 @@ fun MessageBodyText(message: ChatMessageText, inProgress: Boolean) {
       MarkdownText(
         text = message.content,
         modifier = Modifier.padding(12.dp),
-        textColor = Color.White,
-        linkColor = Color.White,
+        textColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        linkColor = MaterialTheme.colorScheme.onPrimaryContainer,
       )
     } else if (message.side == ChatSide.AGENT) {
       val cdResponse = stringResource(R.string.cd_model_response_text)

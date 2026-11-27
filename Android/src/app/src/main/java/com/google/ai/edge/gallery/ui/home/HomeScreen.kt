@@ -164,7 +164,6 @@ private val PREDEFINED_CATEGORY_ORDER =
     Category.LLM.id,
     Category.IMAGE_GEN.id,
     Category.VOICE.id,
-    Category.EXPERIMENTAL.id,
   )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -752,7 +751,7 @@ private fun CategoryTabHeader(
   LazyRow(
     state = listState,
     modifier =
-      Modifier.fillMaxWidth().padding(bottom = 32.dp).graphicsLayer {
+      Modifier.fillMaxWidth().padding(bottom = 16.dp).graphicsLayer {
         alpha = progress
         translationY = (CONTENT_COMPOSABLES_OFFSET_Y.dp * (1 - progress)).toPx()
       },
@@ -848,7 +847,7 @@ private fun TaskList(
     val tasks = tasksByCategories[sortedCategories[pageIndex].id]!!
     if (grid) {
       Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier =
           Modifier.fillMaxWidth().padding(4.dp).graphicsLayer {
             translationY = (CONTENT_COMPOSABLES_OFFSET_Y.dp * (1 - progress)).toPx()
@@ -857,7 +856,7 @@ private fun TaskList(
         for (i in tasks.indices step 2) {
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
           ) {
             // First item in the row
             TaskCard(
@@ -991,8 +990,8 @@ private fun TaskCard(
   ) {
     if (square) {
       Column(
-        modifier = Modifier.fillMaxSize().padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         Column() {
           Text(

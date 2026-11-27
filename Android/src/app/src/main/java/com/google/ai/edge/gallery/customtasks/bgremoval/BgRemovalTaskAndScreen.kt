@@ -226,7 +226,7 @@ class BgRemovalTask @Inject constructor() : CustomTask {
     Task(
       id = BuiltInTaskId.BACKGROUND_REMOVAL,
       label = "Background Removal",
-      category = Category.EXPERIMENTAL,
+      category = Category.IMAGE_GEN,
       icon = Icons.Outlined.AutoFixHigh,
       models = mutableListOf(),
       description =

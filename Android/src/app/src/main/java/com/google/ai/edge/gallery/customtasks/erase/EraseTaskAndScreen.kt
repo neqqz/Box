@@ -260,7 +260,7 @@ class EraseTask @Inject constructor() : CustomTask {
     Task(
       id = BuiltInTaskId.MIGAN,
       label = "Erase",
-      category = Category.EXPERIMENTAL,
+      category = Category.IMAGE_GEN,
       icon = Icons.Outlined.AutoFixNormal,
       models =
         mutableListOf(

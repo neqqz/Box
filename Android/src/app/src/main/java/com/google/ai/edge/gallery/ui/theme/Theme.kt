@@ -178,8 +178,8 @@ val lightCustomColors =
         Color(0xFF2D5A2D),
         // green gradient 2
         Color(0xFF128937),
-        // phosphorus green
-        Color(0xFF4BFF00),
+        // green accent
+        Color(0xFF34A853),
         // green gradient 3
         Color(0xFF1A331A),
       ),
@@ -256,8 +256,8 @@ val darkCustomColors =
         Color(0xFF2D5A2D),
         // green gradient 2
         Color(0xFF41A15F),
-        // phosphorus green
-        Color(0xFF4BFF00),
+        // green accent
+        Color(0xFF34A853),
         // green gradient 3
         Color(0xFF1A331A),
       ),
@@ -372,16 +372,8 @@ fun GalleryTheme(content: @Composable () -> Unit) {
     taskCardBgColor = if (darkTheme) colorScheme.surfaceContainerHigh else colorScheme.surfaceContainerLowest,
     taskIconShapeBgColor = colorScheme.primaryContainer,
     userBubbleBgColor = colorScheme.primaryContainer,
-    agentBubbleBgColor = if (customTheme == CustomThemeType.SYSTEM || customTheme == CustomThemeType.LIGHT) {
-      colorScheme.surfaceContainerHigh
-    } else {
-      colorScheme.secondaryContainer
-    },
-    linkColor = if (customTheme == CustomThemeType.SYSTEM || customTheme == CustomThemeType.LIGHT) {
-      colorScheme.primary
-    } else {
-      colorScheme.outline
-    },
+    agentBubbleBgColor = colorScheme.surfaceContainerHigh,
+    linkColor = colorScheme.primary,
     successColor = colorScheme.tertiary,
   )
 
