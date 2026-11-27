@@ -146,8 +146,7 @@ object LlamaCppModelHelper : LlmModelHelper {
             temperature = temperature,
             topP = topP,
             topK = topK,
-            // "Auto" must not fall back to the model's trained context (up to 262144): KV cache alone eats all RAM.
-            contextSize = if (configuredCtx > 0) configuredCtx.toLong() else 4096L,
+            contextSize = if (configuredCtx > 0) configuredCtx.toLong() else null,
             numThreads = numThreads,
             useMmap = prefs.getBoolean("llama_use_mmap", false),
             useMlock = prefs.getBoolean("llama_use_mlock", false),
