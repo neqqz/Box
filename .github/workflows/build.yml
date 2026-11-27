@@ -29,7 +29,9 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/KhronosGroup/Vulkan-Headers.git "$RUNNER_TEMP/vulkan-headers"
           echo "VULKAN_HEADERS_DIR=$RUNNER_TEMP/vulkan-headers" >> "$GITHUB_ENV"
-          git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git "$RUNNER_TEMP/spirv-headers"
+          git clone --depth 1 https://github.com/KhronosGroup/SPIRV-Headers.git "$RUNNER_TEMP/spirv-headers-src"
+          cmake -S "$RUNNER_TEMP/spirv-headers-src" -B "$RUNNER_TEMP/spirv-headers-build" -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/spirv-headers"
+          cmake --install "$RUNNER_TEMP/spirv-headers-build"
           echo "SPIRV_HEADERS_DIR=$RUNNER_TEMP/spirv-headers" >> "$GITHUB_ENV"
 
       - name: Configure release signing if secrets are present
