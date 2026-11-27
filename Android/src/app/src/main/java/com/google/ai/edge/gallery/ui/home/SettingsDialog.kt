@@ -457,6 +457,52 @@ fun SettingsDialog(
                 }
               }
 
+              // ---- MCP (Model Context Protocol) toggle ----
+              Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+                Text(
+                  "MCP (Model Context Protocol)",
+                  style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                )
+                Text(
+                  if (offlineEnabled.value) {
+                    "Disable Hard Offline Mode to enable MCP."
+                  } else {
+                    "Allow the model to call external tools from servers you configure. Network requests are made only to your configured servers."
+                  },
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val mcpEnabled = remember {
+                  mutableStateOf(
+                    context
+                      .getSharedPreferences("box_settings", Context.MODE_PRIVATE)
+                      .getBoolean("mcp_enabled", false)
+                  )
+                }
+                Row(
+                  modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Text(
+                    if (mcpEnabled.value && !offlineEnabled.value) "Enabled" else "Disabled",
+                    style = MaterialTheme.typography.bodyMedium,
+                  )
+                  androidx.compose.material3.Switch(
+                    checked = mcpEnabled.value && !offlineEnabled.value,
+                    enabled = !offlineEnabled.value,
+                    onCheckedChange = { enabled ->
+                      mcpEnabled.value = enabled
+                      context
+                        .getSharedPreferences("box_settings", Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("mcp_enabled", enabled)
+                        .apply()
+                    },
+                  )
+                }
+              }
+
               // ---- HF Token management ----
               Column(
                 modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},

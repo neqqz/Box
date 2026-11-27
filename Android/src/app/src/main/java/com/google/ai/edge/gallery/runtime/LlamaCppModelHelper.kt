@@ -271,13 +271,40 @@ object LlamaCppModelHelper : LlmModelHelper {
             for (step in 0 until MAX_AGENT_TOOL_STEPS) {
                 var cancelled = false
                 var error: Exception? = null
+                var streamedToUi = false
                 val response = suspendCancellableCoroutine<String> { cont ->
+                    cont.invokeOnCancellation { engine.stopGeneration() }
                     val acc = StringBuilder()
+                    val pendingBuffer = StringBuilder()
+                    var decidedMode = false // true once we know whether this is a tool call or plain text
+                    var isToolCallOutput = false
+
                     engine.generateResponse(
                         query = currentPrompt,
-                        onToken = { token -> acc.append(token) },
+                        onToken = { token ->
+                            acc.append(token)
+                            if (!decidedMode) {
+                                pendingBuffer.append(token)
+                                val trimmed = pendingBuffer.toString().trimStart()
+                                if (trimmed.startsWith("<tool_call>") || trimmed.startsWith("{")) {
+                                    decidedMode = true
+                                    isToolCallOutput = true
+                                } else if (trimmed.length >= 12 && !"<tool_call>".startsWith(trimmed)) {
+                                    decidedMode = true
+                                    isToolCallOutput = false
+                                    streamedToUi = true
+                                    resultListener(pendingBuffer.toString(), false, null)
+                                    pendingBuffer.clear()
+                                }
+                            } else if (!isToolCallOutput) {
+                                streamedToUi = true
+                                resultListener(token, false, null)
+                            }
+                        },
                         onComplete = { result ->
-                            if (cont.isActive) cont.resume(result.response.ifEmpty { acc.toString() })
+                            if (cont.isActive) {
+                                cont.resume(result.response.ifEmpty { acc.toString() })
+                            }
                         },
                         onCancelled = {
                             cancelled = true
@@ -295,13 +322,13 @@ object LlamaCppModelHelper : LlmModelHelper {
                     return@launch
                 }
                 if (cancelled) {
-                    if (response.isNotEmpty()) resultListener(response, false, null)
+                    if (!streamedToUi && response.isNotEmpty()) resultListener(response, false, null)
                     resultListener("", true, null)
                     return@launch
                 }
                 val toolCall = parseToolCall(response)
                 if (toolCall == null) {
-                    if (response.isNotEmpty()) resultListener(response, false, null)
+                    if (!streamedToUi && response.isNotEmpty()) resultListener(response, false, null)
                     resultListener("", true, null)
                     return@launch
                 }
