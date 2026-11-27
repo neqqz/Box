@@ -138,6 +138,14 @@ fun ChatPanel(
   val scope = rememberCoroutineScope()
   val clipboardManager = LocalClipboardManager.current
   val haptic = LocalHapticFeedback.current
+  val chatContext = androidx.compose.ui.platform.LocalContext.current
+  val chatView = androidx.compose.ui.platform.LocalView.current
+  val chatPrefs = remember { chatContext.getSharedPreferences("box_settings", android.content.Context.MODE_PRIVATE) }
+  androidx.compose.runtime.DisposableEffect(Unit) {
+    val keepOn = chatPrefs.getBoolean("keep_screen_on", false)
+    if (keepOn) chatView.keepScreenOn = true
+    onDispose { if (keepOn) chatView.keepScreenOn = false }
+  }
   val imageCountToLastConfigChange =
     remember(messages) {
       var imageCount = 0
@@ -572,6 +580,9 @@ fun ChatPanel(
         textFieldPlaceHolderRes = task.textInputPlaceHolderRes,
         onValueChanged = { curMessage = it },
         onSendMessage = {
+          if (chatPrefs.getBoolean("haptic_on_send", false)) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+          }
           onSendMessage(selectedModel, it)
           curMessage = ""
           // Hide software keyboard.

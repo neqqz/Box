@@ -54,6 +54,13 @@ fun MessageBodyThinking(thinkingText: String, inProgress: Boolean) {
   if (inProgress) {
     isExpanded = true
   }
+  val autoCollapse =
+    androidx.compose.ui.platform.LocalContext.current
+      .getSharedPreferences("box_settings", android.content.Context.MODE_PRIVATE)
+      .getBoolean("auto_collapse_thinking", true)
+  androidx.compose.runtime.LaunchedEffect(inProgress) {
+    if (!inProgress && autoCollapse) isExpanded = false
+  }
 
   Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
     Row(

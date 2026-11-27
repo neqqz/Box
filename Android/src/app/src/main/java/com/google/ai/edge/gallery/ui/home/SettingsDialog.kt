@@ -559,7 +559,7 @@ fun SettingsDialog(
           }
 
           SettingsAccordionSection(
-            title = "Chat",
+            title = "Chat & Voice",
             expanded = expandChat,
             onToggle = { expandChat = !expandChat },
           ) {
@@ -983,54 +983,47 @@ private fun SettingsAccordionSection(
 }
 
 @Composable
+private fun PrefSwitchRow(
+  prefs: android.content.SharedPreferences,
+  key: String,
+  default: Boolean,
+  title: String,
+  description: String,
+) {
+  var checked by remember { mutableStateOf(prefs.getBoolean(key, default)) }
+  Row(
+    modifier = Modifier.fillMaxWidth(),
+    horizontalArrangement = Arrangement.SpaceBetween,
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Column(modifier = Modifier.weight(1f)) {
+      Text(title, style = MaterialTheme.typography.bodySmall)
+      Text(
+        description,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+      )
+    }
+    androidx.compose.material3.Switch(
+      checked = checked,
+      onCheckedChange = {
+        checked = it
+        prefs.edit().putBoolean(key, it).apply()
+      },
+    )
+  }
+}
+
+@Composable
 private fun ChatPrefsSection(context: Context) {
   val prefs = remember { context.getSharedPreferences(ThemeSettings.PREFS_NAME, Context.MODE_PRIVATE) }
-  var showTps by remember { mutableStateOf(prefs.getBoolean("chat_show_tps", false)) }
-  var restoreMemory by remember { mutableStateOf(prefs.getBoolean("chat_restore_memory", true)) }
-
   Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Column(modifier = Modifier.weight(1f)) {
-        Text("Show tokens per second", style = MaterialTheme.typography.bodySmall)
-        Text(
-          "Display generation speed below each response.",
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      }
-      androidx.compose.material3.Switch(
-        checked = showTps,
-        onCheckedChange = {
-          showTps = it
-          prefs.edit().putBoolean("chat_show_tps", it).apply()
-        },
-      )
-    }
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically,
-    ) {
-      Column(modifier = Modifier.weight(1f)) {
-        Text("Restore chat memory", style = MaterialTheme.typography.bodySmall)
-        Text(
-          "Re-feed recent conversation context when reopening a saved chat.",
-          style = MaterialTheme.typography.labelSmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-      }
-      androidx.compose.material3.Switch(
-        checked = restoreMemory,
-        onCheckedChange = {
-          restoreMemory = it
-          prefs.edit().putBoolean("chat_restore_memory", it).apply()
-        },
-      )
-    }
+    PrefSwitchRow(prefs, "chat_show_tps", false, "Show tokens per second", "Display generation speed below each response.")
+    PrefSwitchRow(prefs, "chat_restore_memory", true, "Restore chat memory", "Re-feed recent conversation context when reopening a saved chat.")
+    PrefSwitchRow(prefs, "keep_screen_on", false, "Keep screen on in chat", "Prevent the screen from sleeping while AI Chat is open.")
+    PrefSwitchRow(prefs, "haptic_on_send", false, "Haptic feedback on send", "Vibrate briefly when a message is sent.")
+    PrefSwitchRow(prefs, "confirm_before_clear", true, "Confirm before clearing chat", "Show a confirmation dialog before the reset button clears the conversation.")
+    PrefSwitchRow(prefs, "auto_collapse_thinking", true, "Auto-collapse thinking blocks", "Automatically collapse the model's reasoning block when generation finishes.")
   }
 }
 
