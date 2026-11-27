@@ -18,8 +18,16 @@ package com.google.ai.edge.gallery.ui.common.chat
 
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -47,6 +55,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -75,6 +84,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -86,8 +96,12 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -101,6 +115,7 @@ import com.google.ai.edge.gallery.ui.common.FloatingBanner
 import com.google.ai.edge.gallery.ui.common.RotationalLoader
 import com.google.ai.edge.gallery.ui.modelmanager.ModelInitializationStatusType
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
+import com.google.ai.edge.gallery.ui.theme.PressStart2PFontFamily
 import com.google.ai.edge.gallery.ui.theme.customColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -208,20 +223,19 @@ fun ChatPanel(
     }
   }
 
-  // Scroll to keep up with streaming, ONLY if we are already at the bottom.
+  // Scroll to keep up with streaming, ONLY if we are already at the bottom and user is not scrolling.
   LaunchedEffect(lastMessage.value, lastMessageContent.value, lastMessage.value?.latencyMs) {
-    if (messages.isNotEmpty()) {
+    if (messages.isNotEmpty() && !listState.isScrollInProgress) {
       val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
       if (lastVisibleItem != null) {
-        // Determines if an automatic scroll is necessary. It is true if the scroll position is
-        // close to the bottom (within 90 pixels of the end offset. 90 is slightly taller than
-        // the "show stats" chip).
         val canScroll =
           lastVisibleItem.index == messages.size - 1 &&
             lastVisibleItem.offset + lastVisibleItem.size - listState.layoutInfo.viewportEndOffset <
-              90
+              120
         if (canScroll) {
-          scrollToBottom(listState = listState, animate = true)
+          // Use instant scrollToItem during token streaming so repeated animateScrollToItem
+          // calls don't cancel each other mid-animation and cause jerky scrolling.
+          scrollToBottom(listState = listState, animate = false)
         }
       }
     }
@@ -230,13 +244,10 @@ fun ChatPanel(
   val nestedScrollConnection = remember {
     object : NestedScrollConnection {
       override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-        // If downward scroll, clear the focus from any currently focused composable.
-        // This is useful for dismissing software keyboards or hiding text input fields
-        // when the user starts scrolling down a list.
-        if (available.y > 0) {
+        // Clear focus only on intentional user downward drag, not on every layout/programmatic scroll frame.
+        if (source == NestedScrollSource.UserInput && available.y > 12f) {
           focusManager.clearFocus()
         }
-        // Let LazyColumn handle the scroll
         return Offset.Zero
       }
     }
@@ -532,17 +543,18 @@ fun ChatPanel(
           ) {
             Box(modifier = Modifier.background(MaterialTheme.colorScheme.surface).fillMaxSize()) {
               Column(
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier.align(Alignment.Center).padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
               ) {
-                RotationalLoader(size = 32.dp)
-                Text(
-                  stringResource(R.string.aichat_initializing_title),
+                InitializingDotsRow()
+                InitializingPixelText(
+                  text = stringResource(R.string.aichat_initializing_title),
                   style =
                     MaterialTheme.typography.headlineLarge.copy(
                       fontSize = 24.sp,
                       fontWeight = FontWeight.Bold,
+                      fontFamily = PressStart2PFontFamily,
                     ),
                 )
                 Text(
@@ -650,4 +662,97 @@ private suspend fun scrollToBottom(listState: LazyListState, animate: Boolean = 
       listState.scrollToItem(itemCount - 1, scrollOffset = 1000000)
     }
   }
+}
+
+@Composable
+private fun InitializingDotsRow() {
+  val palette =
+    listOf(
+      MaterialTheme.colorScheme.primary,
+      MaterialTheme.colorScheme.secondary,
+      MaterialTheme.colorScheme.tertiary,
+    )
+  val transition = rememberInfiniteTransition(label = "init_dots")
+  val colorPhase by
+    transition.animateFloat(
+      initialValue = 0f,
+      targetValue = 1f,
+      animationSpec =
+        infiniteRepeatable(
+          animation = tween(durationMillis = 2200, easing = LinearEasing),
+          repeatMode = RepeatMode.Restart,
+        ),
+      label = "init_dots_color",
+    )
+
+  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    repeat(4) { index ->
+      val scale by
+        transition.animateFloat(
+          initialValue = 0.45f,
+          targetValue = 1f,
+          animationSpec =
+            infiniteRepeatable(
+              animation = tween(
+                durationMillis = 560,
+                delayMillis = index * 130,
+                easing = FastOutSlowInEasing,
+              ),
+              repeatMode = RepeatMode.Reverse,
+            ),
+          label = "init_dot_scale_$index",
+        )
+      val dotColor = cyclePaletteColor(palette, colorPhase + index * 0.12f)
+      Box(
+        modifier =
+          Modifier.size(12.dp)
+            .graphicsLayer {
+              scaleX = scale
+              scaleY = scale
+            }
+            .clip(CircleShape)
+            .background(dotColor)
+      )
+    }
+  }
+}
+
+@Composable
+private fun InitializingPixelText(text: String, style: TextStyle) {
+  val palette =
+    listOf(
+      MaterialTheme.colorScheme.primary,
+      MaterialTheme.colorScheme.secondary,
+      MaterialTheme.colorScheme.tertiary,
+    )
+  val transition = rememberInfiniteTransition(label = "init_text")
+  val phase by
+    transition.animateFloat(
+      initialValue = 0f,
+      targetValue = 1f,
+      animationSpec =
+        infiniteRepeatable(
+          animation = tween(durationMillis = 2200, easing = LinearEasing),
+          repeatMode = RepeatMode.Restart,
+        ),
+      label = "init_text_color",
+    )
+
+  val annotated = buildAnnotatedString {
+    text.forEachIndexed { index, ch ->
+      withStyle(SpanStyle(color = cyclePaletteColor(palette, phase + index * 0.07f))) {
+        append(ch)
+      }
+    }
+  }
+
+  Text(text = annotated, style = style, textAlign = TextAlign.Center)
+}
+
+private fun cyclePaletteColor(palette: List<Color>, rawPhase: Float): Color {
+  val size = palette.size
+  val normalized = ((rawPhase % 1f) + 1f) % 1f * size
+  val idx = normalized.toInt()
+  val fraction = normalized - idx
+  return lerp(palette[idx % size], palette[(idx + 1) % size], fraction)
 }
