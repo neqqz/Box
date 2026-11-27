@@ -19,10 +19,12 @@ package com.google.ai.edge.gallery.ui.common
 // import androidx.compose.ui.tooling.preview.Preview
 // import com.google.ai.edge.gallery.ui.preview.MODEL_TEST1
 // import com.google.ai.edge.gallery.ui.theme.GalleryTheme
+import android.content.Context
 import android.util.Log
 import androidx.annotation.StringRes
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +36,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -47,9 +50,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -83,6 +89,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
@@ -208,12 +215,96 @@ fun ConfigDialog(
             ConfigEditorsPanel(configs = configs, values = values)
           }
         } else if (selectedTabIndex == 1) {
+          val context = LocalContext.current
+          var savedPrompts by remember { mutableStateOf(loadSavedSystemPrompts(context)) }
+          var showSavePromptDialog by remember { mutableStateOf(false) }
+          var newPromptTitle by remember { mutableStateOf("") }
+
+          if (showSavePromptDialog) {
+            AlertDialog(
+              onDismissRequest = { showSavePromptDialog = false },
+              title = { Text("Save System Prompt") },
+              text = {
+                OutlinedTextField(
+                  value = newPromptTitle,
+                  onValueChange = { newPromptTitle = it },
+                  label = { Text("Title") },
+                  singleLine = true,
+                  modifier = Modifier.fillMaxWidth(),
+                )
+              },
+              confirmButton = {
+                Button(
+                  enabled = newPromptTitle.isNotBlank() && systemPrompt.isNotBlank(),
+                  onClick = {
+                    val updated = savedPrompts + SavedSystemPrompt(
+                      title = newPromptTitle.trim(),
+                      prompt = systemPrompt,
+                    )
+                    savedPrompts = updated
+                    saveSavedSystemPrompts(context, updated)
+                    newPromptTitle = ""
+                    showSavePromptDialog = false
+                  },
+                ) {
+                  Text("Save")
+                }
+              },
+              dismissButton = {
+                TextButton(onClick = { showSavePromptDialog = false }) { Text("Cancel") }
+              },
+            )
+          }
+
+          if (savedPrompts.isNotEmpty()) {
+            Row(
+              modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              for (saved in savedPrompts) {
+                FilterChip(
+                  selected = systemPrompt == saved.prompt,
+                  onClick = { systemPrompt = saved.prompt },
+                  label = { Text(saved.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                  trailingIcon = {
+                    Icon(
+                      imageVector = Icons.Rounded.Close,
+                      contentDescription = "Remove",
+                      modifier = Modifier.size(16.dp).clickable {
+                        val updated = savedPrompts.filterNot { it.id == saved.id }
+                        savedPrompts = updated
+                        saveSavedSystemPrompts(context, updated)
+                      },
+                    )
+                  },
+                )
+              }
+            }
+          }
+
           OutlinedTextField(
             value = systemPrompt,
             modifier = Modifier.weight(1f, fill = false),
             textStyle = MaterialTheme.typography.bodySmall,
             onValueChange = { systemPrompt = it },
           )
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start,
+          ) {
+            OutlinedButton(
+              enabled = systemPrompt.isNotBlank(),
+              onClick = {
+                newPromptTitle = ""
+                showSavePromptDialog = true
+              },
+              contentPadding = SMALL_BUTTON_CONTENT_PADDING,
+            ) {
+              Text("Save Prompt")
+            }
+          }
         }
 
         // Button row.
@@ -644,4 +735,53 @@ fun BottomSheetSelectorRow(
       }
     }
   }
+}
+
+data class SavedSystemPrompt(
+  val id: String = java.util.UUID.randomUUID().toString(),
+  val title: String,
+  val prompt: String,
+)
+
+private fun loadSavedSystemPrompts(context: Context): List<SavedSystemPrompt> {
+  val raw = context.getSharedPreferences("box_settings", Context.MODE_PRIVATE)
+    .getString("saved_system_prompts", null) ?: return emptyList()
+  return try {
+    val arr = org.json.JSONArray(raw)
+    buildList {
+      for (i in 0 until arr.length()) {
+        val obj = arr.optJSONObject(i) ?: continue
+        val title = obj.optString("title", "")
+        val prompt = obj.optString("prompt", "")
+        if (title.isNotEmpty() || prompt.isNotEmpty()) {
+          add(
+            SavedSystemPrompt(
+              id = obj.optString("id", java.util.UUID.randomUUID().toString()),
+              title = title,
+              prompt = prompt,
+            )
+          )
+        }
+      }
+    }
+  } catch (_: Exception) {
+    emptyList()
+  }
+}
+
+private fun saveSavedSystemPrompts(context: Context, prompts: List<SavedSystemPrompt>) {
+  val arr = org.json.JSONArray()
+  for (p in prompts) {
+    arr.put(
+      org.json.JSONObject().apply {
+        put("id", p.id)
+        put("title", p.title)
+        put("prompt", p.prompt)
+      }
+    )
+  }
+  context.getSharedPreferences("box_settings", Context.MODE_PRIVATE)
+    .edit()
+    .putString("saved_system_prompts", arr.toString())
+    .apply()
 }
