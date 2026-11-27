@@ -315,7 +315,8 @@ object LlamaCppModelHelper : LlmModelHelper {
                 } else {
                     try {
                         kotlinx.coroutines.withContext(Dispatchers.IO) {
-                            tool.execute(args)?.toString() ?: "{}"
+                            tool.execute(com.google.gson.JsonParser.parseString(args.toString()).asJsonObject)
+                                ?.toString() ?: "{}"
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Tool execution failed: $toolName", e)
