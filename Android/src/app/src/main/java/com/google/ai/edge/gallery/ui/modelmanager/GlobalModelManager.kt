@@ -93,6 +93,7 @@ import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.proto.ImportedModel
 import com.google.ai.edge.gallery.ui.common.TaskIcon
 import com.google.ai.edge.gallery.ui.common.modelitem.ModelItem
+import com.google.ai.edge.gallery.ui.theme.PressStart2PFontFamily
 import kotlin.text.endsWith
 import kotlin.text.lowercase
 import kotlinx.coroutines.delay
@@ -278,18 +279,55 @@ fun GlobalModelManager(
           }
         }
 
-        items(builtInModels) { model ->
-          val expanded = modelItemExpandedStates.getOrDefault(model.name, true)
-          ModelItem(
-            model = model,
-            task = null,
-            modelManagerViewModel = viewModel,
-            onModelClicked = handleClickModel,
-            onBenchmarkClicked = onBenchmarkClicked,
-            expanded = expanded,
-            showBenchmarkButton = model.runtimeType == RuntimeType.LITERT_LM,
-            onExpanded = { modelItemExpandedStates[model.name] = it },
-          )
+        val categoryOrder = listOf(
+          "Language models",
+          "Speech-to-Text",
+          "Text-to-Speech",
+          "Image generation",
+          "Other",
+        )
+        val groupedBuiltIn = builtInModels.groupBy { model ->
+          val taskIds = uiState.tasks
+            .filter { task -> task.models.any { it.name == model.name } }
+            .map { it.id }
+          when {
+            taskIds.any { it == "tts" || it == "supertonic" } -> "Text-to-Speech"
+            taskIds.any { it == "whisper" || it == "sense_voice" || it == "audio_scribe" } -> "Speech-to-Text"
+            taskIds.any {
+              it == "image_gen" || it == "upscale" || it == "restore" || it == "dewarp" || it == "sketch"
+            } -> "Image generation"
+            taskIds.any { it.startsWith("llm_") } -> "Language models"
+            else -> "Other"
+          }
+        }
+
+        for (category in categoryOrder) {
+          val modelsInCategory = groupedBuiltIn[category].orEmpty()
+          if (modelsInCategory.isNotEmpty()) {
+            item(key = "category_$category") {
+              Text(
+                text = category,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleSmall.copy(
+                  fontFamily = PressStart2PFontFamily,
+                ),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+              )
+            }
+            items(modelsInCategory, key = { "${category}_${it.name}" }) { model ->
+              val expanded = modelItemExpandedStates.getOrDefault(model.name, true)
+              ModelItem(
+                model = model,
+                task = null,
+                modelManagerViewModel = viewModel,
+                onModelClicked = handleClickModel,
+                onBenchmarkClicked = onBenchmarkClicked,
+                expanded = expanded,
+                showBenchmarkButton = model.runtimeType == RuntimeType.LITERT_LM,
+                onExpanded = { modelItemExpandedStates[model.name] = it },
+              )
+            }
+          }
         }
 
         // Imported models.

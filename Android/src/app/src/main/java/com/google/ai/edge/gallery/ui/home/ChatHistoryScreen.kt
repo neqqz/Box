@@ -395,24 +395,30 @@ private fun ConversationCard(
                     }
                 }
                 Spacer(modifier = Modifier.height(2.dp))
-                Row {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     if (conversation.modelName.isNotEmpty()) {
                         Text(
                             text = conversation.modelName,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
                         )
                         Text(
                             text = " · ",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false,
                         )
                     }
                     Text(
                         text = "${conversation.messageCount} messages",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
                 Text(

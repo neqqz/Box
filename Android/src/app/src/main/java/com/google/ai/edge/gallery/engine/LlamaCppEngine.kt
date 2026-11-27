@@ -5,8 +5,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -120,11 +122,18 @@ class LlamaCppEngine {
     }
 
     fun unloadModel() {
-        stateLock.withLock {
-            generationJob?.cancel()
-            loadJob?.cancel()
+        val (genJob, ldJob) = stateLock.withLock {
             isModelLoaded.set(false)
             isGenerating = false
+            generationJob to loadJob
+        }
+        // Wait for active decode/load coroutines to exit before freeing llama_context.
+        // Calling llama_free() concurrently with Vulkan llama_decode() causes vk::DeviceLostError.
+        runBlocking {
+            genJob?.cancelAndJoin()
+            ldJob?.cancelAndJoin()
+        }
+        stateLock.withLock {
             try {
                 instance.close()
             } catch (_: Exception) {}
@@ -143,33 +152,34 @@ class LlamaCppEngine {
         onSuccess: () -> Unit = {},
         onError: (Exception) -> Unit = {},
     ) {
-        stateLock.withLock {
-            generationJob?.cancel()
+        val prevGenJob = stateLock.withLock {
             isGenerating = false
+            generationJob
+        }
 
-            CoroutineScope(Dispatchers.Default).launch {
-                try {
-                    // Close and reopen — this clears the KV cache and message history
-                    // but the OS keeps model pages in memory so reload is fast
-                    instance.close()
-                    instance = SmolLM()
-                    if (lastNativeLibDir.isNotEmpty()) {
-                        instance.loadBackends(lastNativeLibDir)
-                    }
-                    instance.load(modelPath, params)
-
-                    if (systemPrompt.isNotBlank()) {
-                        instance.addSystemPrompt(systemPrompt)
-                    }
-
-                    isModelLoaded.set(true)
-                    withContext(Dispatchers.Main) { onSuccess() }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    isModelLoaded.set(false)
-                    withContext(Dispatchers.Main) { onError(e) }
+        CoroutineScope(Dispatchers.Default).launch {
+            try {
+                prevGenJob?.cancelAndJoin()
+                // Close and reopen — this clears the KV cache and message history
+                // but the OS keeps model pages in memory so reload is fast
+                instance.close()
+                instance = SmolLM()
+                if (lastNativeLibDir.isNotEmpty()) {
+                    instance.loadBackends(lastNativeLibDir)
                 }
+                instance.load(modelPath, params)
+
+                if (systemPrompt.isNotBlank()) {
+                    instance.addSystemPrompt(systemPrompt)
+                }
+
+                isModelLoaded.set(true)
+                withContext(Dispatchers.Main) { onSuccess() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                isModelLoaded.set(false)
+                withContext(Dispatchers.Main) { onError(e) }
             }
         }
     }

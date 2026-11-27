@@ -91,8 +91,11 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = contextSize;
-    ctx_params.n_batch = std::min<uint32_t>(ctx_params.n_ctx, 2048);
-    ctx_params.n_ubatch = 512;
+    // Cap GPU batch/ubatch to avoid Adreno Vulkan TDR (vk::DeviceLostError) on 4B+ models.
+    ctx_params.n_batch = (nGpuLayers > 0)
+        ? std::min<uint32_t>(ctx_params.n_ctx, 512)
+        : std::min<uint32_t>(ctx_params.n_ctx, 2048);
+    ctx_params.n_ubatch = (nGpuLayers > 0) ? 256 : 512;
     // On GPU let llama.cpp probe FA support; forcing it makes unsupported ops fall back to CPU on GPU-resident tensors.
     ctx_params.flash_attn_type = (nGpuLayers > 0) ? LLAMA_FLASH_ATTN_TYPE_AUTO : LLAMA_FLASH_ATTN_TYPE_ENABLED;
     ctx_params.n_threads = nThreads;
@@ -202,10 +205,14 @@ LLMInference::prewarmHistory() {
 
     llama_memory_clear(llama_get_memory(_ctx), false);
     llama_batch batch = llama_batch_get_one(tokens.data(), tokens.size());
-    if (llama_decode(_ctx, batch) != 0) {
-        LOGi("prewarmHistory: decode failed (non-fatal; first send will prefill)");
-    } else {
-        LOGi("prewarmHistory: prefilled %zu history tokens at load", tokens.size());
+    try {
+        if (llama_decode(_ctx, batch) != 0) {
+            LOGi("prewarmHistory: decode failed (non-fatal; first send will prefill)");
+        } else {
+            LOGi("prewarmHistory: prefilled %zu history tokens at load", tokens.size());
+        }
+    } catch (const std::exception& e) {
+        LOGe("prewarmHistory: exception during decode (non-fatal): %s", e.what());
     }
 }
 

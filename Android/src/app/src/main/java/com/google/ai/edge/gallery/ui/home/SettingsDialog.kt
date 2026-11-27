@@ -70,6 +70,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -111,6 +112,7 @@ import com.google.ai.edge.gallery.ui.theme.CatppuccinAccent
 import com.google.ai.edge.gallery.ui.theme.CatppuccinFlavor
 import com.google.ai.edge.gallery.ui.theme.CustomThemeType
 import com.google.ai.edge.gallery.ui.theme.DraculaAccent
+import com.google.ai.edge.gallery.ui.theme.PressStart2PFontFamily
 import com.google.ai.edge.gallery.ui.theme.PtyxisExtendedPalette
 import com.google.ai.edge.gallery.ui.theme.PtyxisPalette
 import com.google.ai.edge.gallery.ui.theme.ThemeSettings
@@ -244,7 +246,7 @@ fun SettingsDialog(
         Column {
           Text(
             "Settings",
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.titleLarge.copy(fontFamily = PressStart2PFontFamily),
             modifier = Modifier.padding(bottom = 8.dp),
           )
           Text(
@@ -275,10 +277,13 @@ fun SettingsDialog(
             onToggle = { expandAppearance = !expandAppearance },
           ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-              // ---- Theme base switcher (Auto / Light / Dark) ----
+              // ---- Color Theme Picker ----
+              CustomThemeSection(context)
+
+              // ---- Light / dark mode switcher (Auto / Light / Dark) ----
               Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
                 Text(
-                  "Theme",
+                  "Light / dark mode",
                   style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
                 )
                 MultiChoiceSegmentedButtonRow {
@@ -308,14 +313,14 @@ fun SettingsDialog(
                 }
               }
 
-              // ---- Custom Theme Picker ----
-              CustomThemeSection(context)
-
-              // ---- Font Picker ----
-              FontPickerSection(context)
+              // ---- App Font Picker ----
+              AppFontPickerSection(context)
 
               // ---- Language Switcher ----
               LanguageSwitcherSection(context)
+
+              // ---- Per-area Font Pickers & Text Size ----
+              AreaFontPickersSection(context)
             }
           }
 
@@ -685,26 +690,34 @@ private fun CustomThemeSection(context: Context) {
 
   Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
     Text(
-      "Custom theme",
+      "Color Theme",
       style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
     )
     Text(
-      "Override the base theme with a custom color palette.",
+      "System uses your wallpaper colors. Catppuccin and Dracula replace all surfaces and accents with their own palettes.",
       style = MaterialTheme.typography.bodySmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Spacer(modifier = Modifier.height(4.dp))
 
-    // Theme type chips
-    FlowRow(
-      horizontalArrangement = Arrangement.spacedBy(6.dp),
-      verticalArrangement = Arrangement.spacedBy(4.dp),
+    // Theme type segmented buttons
+    SingleChoiceSegmentedButtonRow(
+      modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
     ) {
-      CustomThemeType.entries.forEach { type ->
-        FilterChip(
+      val types = CustomThemeType.entries
+      types.forEachIndexed { index, type ->
+        SegmentedButton(
           selected = currentTheme == type,
           onClick = { ThemeSettings.setCustomTheme(context, type) },
-          label = { Text(type.label, style = MaterialTheme.typography.labelMedium) },
+          shape = SegmentedButtonDefaults.itemShape(index = index, count = types.size),
+          icon = {},
+          label = {
+            Text(
+              type.label,
+              style = MaterialTheme.typography.labelSmall,
+              maxLines = 1,
+              softWrap = false,
+            )
+          },
         )
       }
     }
@@ -825,69 +838,79 @@ private fun CustomThemeSection(context: Context) {
 // ======== Font Picker ========
 
 @Composable
-private fun FontPickerSection(context: Context) {
+private fun AppFontPickerSection(context: Context) {
   val currentAppFont by ThemeSettings.appFont
+  val fontOptions = AppFont.entries.map { it.displayName }
+
+  Column(
+    modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
+    Text(
+      "Font",
+      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+    )
+    DropdownPicker(
+      label = "Font",
+      options = fontOptions,
+      selected = currentAppFont.displayName,
+      onSelect = { idx -> ThemeSettings.setAppFont(context, AppFont.entries[idx]) },
+    )
+  }
+}
+
+@Composable
+private fun AreaFontPickersSection(context: Context) {
   val currentChatFont by ThemeSettings.chatFont
   val currentQuickActionsFont by ThemeSettings.quickActionsFont
   val currentCategoryTabsFont by ThemeSettings.categoryTabsFont
   val currentScale by ThemeSettings.fontScale
 
-  Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+  val fontOptions = AppFont.entries.map { it.displayName }
+  val fontOptionsWithDefault = listOf("Same as app font") + fontOptions
+
+  Column(
+    modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
     Text(
-      "Fonts",
+      "Chat font",
       style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
     )
-    Text(
-      "Customize fonts for different UI areas.",
-      style = MaterialTheme.typography.bodySmall,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(modifier = Modifier.height(6.dp))
-
-    val fontOptions = AppFont.entries.map { it.displayName }
-    val fontOptionsWithDefault = listOf("Same as app") + fontOptions
-
-    // App font
-    DropdownPicker(
-      label = "App font",
-      options = fontOptions,
-      selected = currentAppFont.displayName,
-      onSelect = { idx -> ThemeSettings.setAppFont(context, AppFont.entries[idx]) },
-    )
-    Spacer(modifier = Modifier.height(6.dp))
-
-    // Chat font
     DropdownPicker(
       label = "Chat font",
       options = fontOptionsWithDefault,
-      selected = currentChatFont?.displayName ?: "Same as app",
+      selected = currentChatFont?.displayName ?: "Same as app font",
       onSelect = { idx ->
         ThemeSettings.setChatFont(context, if (idx == 0) null else AppFont.entries[idx - 1])
       },
     )
-    Spacer(modifier = Modifier.height(6.dp))
 
-    // Quick actions font
+    Text(
+      "New / History / Import font",
+      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+    )
     DropdownPicker(
-      label = "Quick actions font",
+      label = "New / History / Import font",
       options = fontOptionsWithDefault,
-      selected = currentQuickActionsFont?.displayName ?: "Same as app",
+      selected = currentQuickActionsFont?.displayName ?: "Same as app font",
       onSelect = { idx ->
         ThemeSettings.setQuickActionsFont(context, if (idx == 0) null else AppFont.entries[idx - 1])
       },
     )
-    Spacer(modifier = Modifier.height(6.dp))
 
-    // Category tabs font
+    Text(
+      "Core / Image / Sound font",
+      style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+    )
     DropdownPicker(
-      label = "Category tabs font",
+      label = "Core / Image / Sound font",
       options = fontOptionsWithDefault,
-      selected = currentCategoryTabsFont?.displayName ?: "Same as app",
+      selected = currentCategoryTabsFont?.displayName ?: "Same as app font",
       onSelect = { idx ->
         ThemeSettings.setCategoryTabsFont(context, if (idx == 0) null else AppFont.entries[idx - 1])
       },
     )
-    Spacer(modifier = Modifier.height(8.dp))
 
     // Text size slider
     var sliderValue by remember { mutableFloatStateOf(currentScale) }
@@ -918,20 +941,17 @@ private fun LanguageSwitcherSection(context: Context) {
 
   val localeManager = context.getSystemService(LocaleManager::class.java) ?: return
   val currentLocales = localeManager.applicationLocales
-  val currentTag = if (currentLocales.isEmpty) "" else currentLocales.get(0)?.toLanguageTag() ?: ""
+  val currentTag = if (currentLocales.isEmpty) "" else localeManager.applicationLocales.get(0)?.toLanguageTag() ?: ""
   val selectedIdx = APP_LANGUAGES.indexOfFirst { it.tag == currentTag }.coerceAtLeast(0)
 
-  Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
+  Column(
+    modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+    verticalArrangement = Arrangement.spacedBy(8.dp),
+  ) {
     Text(
       "Language",
       style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
     )
-    Text(
-      "Change the app display language. Requires restart.",
-      style = MaterialTheme.typography.bodySmall,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(modifier = Modifier.height(4.dp))
     DropdownPicker(
       label = "Language",
       options = APP_LANGUAGES.map { it.displayName },
@@ -942,6 +962,11 @@ private fun LanguageSwitcherSection(context: Context) {
           if (tag.isEmpty()) LocaleList.getEmptyLocaleList()
           else LocaleList.forLanguageTags(tag)
       },
+    )
+    Text(
+      "Translations are still in progress — anything not yet translated stays in English.",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
   }
 }

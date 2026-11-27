@@ -68,7 +68,11 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_jegly_offlineLLM_smollm_SmolLM_prewarmHistory(JNIEnv* env, jobject /*unused*/, jlong modelPtr) {
     auto* llmInference = reinterpret_cast<LLMInference*>(modelPtr);
     if (llmInference) {
-        llmInference->prewarmHistory();
+        try {
+            llmInference->prewarmHistory();
+        } catch (const std::exception& error) {
+            LOGw("prewarmHistory failed: %s", error.what());
+        }
     }
 }
 
