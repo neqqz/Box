@@ -91,7 +91,9 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = contextSize;
-    ctx_params.n_batch = contextSize;
+    ctx_params.n_batch = std::min<uint32_t>(ctx_params.n_ctx, 2048);
+    ctx_params.n_ubatch = 512;
+    ctx_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED;
     ctx_params.n_threads = nThreads;
     ctx_params.n_threads_batch = (nThreadsBatch > 0) ? nThreadsBatch : nThreads;
     if (kvCacheQ8) {

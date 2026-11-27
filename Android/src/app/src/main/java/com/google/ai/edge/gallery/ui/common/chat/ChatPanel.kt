@@ -273,7 +273,10 @@ fun ChatPanel(
           state = listState,
           verticalArrangement = Arrangement.Top,
         ) {
-          itemsIndexed(messages) { index, message ->
+          itemsIndexed(
+            items = messages,
+            key = { index, message -> "${index}_${message.side}_${message.type}" },
+          ) { index, message ->
             val imageHistoryCurIndex = remember { mutableIntStateOf(0) }
             var showCopyButton by remember { mutableStateOf(false) }
             var hAlign: Alignment.Horizontal = Alignment.End

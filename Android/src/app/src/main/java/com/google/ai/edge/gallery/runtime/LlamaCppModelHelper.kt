@@ -19,10 +19,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import kotlin.coroutines.resume
 
 private const val TAG = "BoxLlamaCppModelHelper"
@@ -37,7 +35,6 @@ object LlamaCppModelHelper : LlmModelHelper {
     // Indexed by model name
     private val engines: MutableMap<String, LlamaCppEngine> = mutableMapOf()
     private val toolsByModel: MutableMap<String, Map<String, InternalJsonTool>> = mutableMapOf()
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     private fun extractTools(tools: List<ToolProvider>): Map<String, InternalJsonTool> {
         if (tools.isEmpty()) return emptyMap()
@@ -94,9 +91,9 @@ object LlamaCppModelHelper : LlmModelHelper {
             }
             ?: return null
         return try {
-            val obj = json.parseToJsonElement(jsonStr).jsonObject
-            val name = obj["name"]?.jsonPrimitive?.content ?: return null
-            val args = obj["arguments"]?.jsonObject ?: JsonObject(emptyMap())
+            val obj = JsonParser.parseString(jsonStr).asJsonObject
+            val name = obj.get("name")?.asString ?: return null
+            val args = obj.getAsJsonObject("arguments") ?: JsonObject()
             Pair(name, args)
         } catch (_: Exception) {
             null

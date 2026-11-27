@@ -261,9 +261,8 @@ open class LlmChatViewModelBase() : ChatViewModel() {
 
       // Wait for instance to be initialized.
       while (model.instance == null) {
-        delay(100)
+        delay(50)
       }
-      delay(500)
 
       // Run inference.
       val audioClips: MutableList<ByteArray> = mutableListOf()
@@ -274,6 +273,7 @@ open class LlmChatViewModelBase() : ChatViewModel() {
       var firstRun = true
       var chunkCount = 0
       val start = System.currentTimeMillis()
+      var firstTokenMs = 0L
 
       try {
         val resultListener: (String, Boolean, String?) -> Unit =
@@ -353,30 +353,33 @@ open class LlmChatViewModelBase() : ChatViewModel() {
 
                 // Incrementally update the streamed partial results.
                 if (partialResult.isNotEmpty()) {
+                  if (firstTokenMs == 0L) {
+                    firstTokenMs = System.currentTimeMillis()
+                  }
                   chunkCount++
                 }
-                val latencyMs: Long = if (done) System.currentTimeMillis() - start else -1
+                val decodeStart = if (firstTokenMs > 0L) firstTokenMs else start
+                val latencyMs: Long = if (done) (System.currentTimeMillis() - decodeStart).coerceAtLeast(1L) else -1
                 val showTps =
                   done &&
-                    chunkCount > 2 &&
+                    chunkCount > 1 &&
                     latencyMs > 0 &&
                     ::applicationContext.isInitialized &&
                     applicationContext
                       .getSharedPreferences("box_settings", Context.MODE_PRIVATE)
                       .getBoolean("chat_show_tps", false)
-                val finalPartial =
+                val tps =
                   if (showTps) {
-                    val tps = chunkCount * 1000.0 / latencyMs
-                    val sec = latencyMs / 1000.0
-                    "$partialResult\n\n_${String.format("%.1f", tps)} tok/s · ${String.format("%.1f", sec)}s_"
+                    chunkCount * 1000f / latencyMs.toFloat()
                   } else {
-                    partialResult
+                    -1f
                   }
-                if (finalPartial.isNotEmpty() || wasLoading || done) {
+                if (partialResult.isNotEmpty() || wasLoading || done) {
                   updateLastTextMessageContentIncrementally(
                     model = model,
-                    partialContent = finalPartial,
+                    partialContent = partialResult,
                     latencyMs = latencyMs.toFloat(),
+                    tokensPerSecond = tps,
                   )
                 }
               }

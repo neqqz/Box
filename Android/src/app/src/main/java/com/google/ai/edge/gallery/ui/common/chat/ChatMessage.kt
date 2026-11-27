@@ -117,6 +117,7 @@ open class ChatMessageText(
   override val accelerator: String = "",
   override val hideSenderLabel: Boolean = false,
   var data: Any? = null,
+  val tokensPerSecond: Float = -1f,
 ) :
   ChatMessage(
     type = ChatMessageType.TEXT,
@@ -135,6 +136,7 @@ open class ChatMessageText(
       llmBenchmarkResult = llmBenchmarkResult,
       hideSenderLabel = hideSenderLabel,
       data = data,
+      tokensPerSecond = tokensPerSecond,
     )
   }
 }

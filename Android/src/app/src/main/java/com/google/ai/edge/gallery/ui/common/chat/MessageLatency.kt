@@ -31,8 +31,14 @@ import com.google.ai.edge.gallery.ui.common.humanReadableDuration
 @Composable
 fun LatencyText(message: ChatMessage) {
   if (message.latencyMs >= 0) {
+    val tps = (message as? ChatMessageText)?.tokensPerSecond ?: -1f
+    val label = if (tps > 0f) {
+      "${message.latencyMs.humanReadableDuration()} · ${String.format("%.1f", tps)} tok/s"
+    } else {
+      message.latencyMs.humanReadableDuration()
+    }
     Text(
-      message.latencyMs.humanReadableDuration(),
+      label,
       modifier = Modifier.alpha(0.5f).testTag("latency_label"),
       style = MaterialTheme.typography.labelSmall,
     )

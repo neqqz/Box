@@ -936,6 +936,7 @@ private fun TaskCard(
   val modelCountLabel by remember {
     derivedStateOf {
       when (modelCount) {
+        0 -> ""
         1 -> "1 Model"
         else -> "%d Models".format(modelCount)
       }

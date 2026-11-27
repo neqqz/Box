@@ -156,6 +156,7 @@ abstract class ChatViewModel : ViewModel() {
     model: Model,
     partialContent: String,
     latencyMs: Float,
+    tokensPerSecond: Float = -1f,
   ) {
     val newMessagesByModel = _uiState.value.messagesByModel.toMutableMap()
     val newMessages = newMessagesByModel[model.name]?.toMutableList() ?: mutableListOf()
@@ -170,6 +171,7 @@ abstract class ChatViewModel : ViewModel() {
             latencyMs = latencyMs,
             accelerator = lastMessage.accelerator,
             hideSenderLabel = lastMessage.hideSenderLabel,
+            tokensPerSecond = if (tokensPerSecond > 0f) tokensPerSecond else lastMessage.tokensPerSecond,
           )
         newMessages.removeAt(newMessages.size - 1)
         newMessages.add(newLastMessage)

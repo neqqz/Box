@@ -28,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.MapsUgc
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -84,6 +87,7 @@ fun ModelPageAppBar(
   onSystemPromptChanged: (String) -> Unit = {},
 ) {
   var showConfigDialog by remember { mutableStateOf(false) }
+  var showResetConfirmDialog by remember { mutableStateOf(false) }
   val modelManagerUiState by modelManagerViewModel.uiState.collectAsState()
   val context = LocalContext.current
   val curDownloadStatus = modelManagerUiState.modelDownloadStatus[model.name]
@@ -179,7 +183,17 @@ fun ModelPageAppBar(
             val enableResetButton =
               !isModelInitializing && !modelPreparing && !inProgress && isModelInitialized
             IconButton(
-              onClick = { onResetSessionClicked(model) },
+              onClick = {
+                val confirmClear =
+                  context
+                    .getSharedPreferences("box_settings", android.content.Context.MODE_PRIVATE)
+                    .getBoolean("confirm_before_clear", true)
+                if (confirmClear) {
+                  showResetConfirmDialog = true
+                } else {
+                  onResetSessionClicked(model)
+                }
+              },
               enabled = enableResetButton,
               modifier = Modifier.alpha(if (!enableResetButton) 0.5f else 1f),
             ) {
@@ -203,6 +217,28 @@ fun ModelPageAppBar(
       }
     },
   )
+
+  // Reset session confirmation dialog.
+  if (showResetConfirmDialog) {
+    AlertDialog(
+      onDismissRequest = { showResetConfirmDialog = false },
+      title = { Text("Clear chat?") },
+      text = { Text("This will clear the current conversation and reset the model session.") },
+      confirmButton = {
+        Button(
+          onClick = {
+            showResetConfirmDialog = false
+            onResetSessionClicked(model)
+          }
+        ) {
+          Text("Clear")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showResetConfirmDialog = false }) { Text("Cancel") }
+      },
+    )
+  }
 
   // Config dialog.
   if (showConfigDialog) {
