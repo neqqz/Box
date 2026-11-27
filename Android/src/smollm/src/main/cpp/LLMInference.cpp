@@ -64,6 +64,8 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
         ctx_params.type_v = GGML_TYPE_Q8_0;
     }
     ctx_params.no_perf = true;
+    // CPU mode must stay CPU-only: otherwise the scheduler still offloads big prefill matmuls to Vulkan.
+    ctx_params.op_offload = (nGpuLayers > 0);
     _ctx = llama_init_from_model(_model, ctx_params);
     if (!_ctx) {
         LOGe("llama_new_context_with_model() returned null");
