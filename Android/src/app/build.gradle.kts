@@ -65,6 +65,9 @@ android {
     // No applicationName placeholder needed - AndroidManifest.xml directly references the class
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    ndk {
+      abiFilters += listOf("arm64-v8a")
+    }
   }
 
   signingConfigs {
