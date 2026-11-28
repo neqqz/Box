@@ -31,10 +31,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -580,7 +582,7 @@ private fun NanoSubToolScaffold(
         }
       }
     },
-    modifier = Modifier.padding(bottom = bottomPadding),
+    modifier = Modifier.padding(bottom = bottomPadding).imePadding(),
     content = content,
   )
 }
@@ -678,6 +680,7 @@ private fun NanoTextInputTool(
       modifier = Modifier
         .fillMaxSize()
         .padding(innerPadding)
+        .consumeWindowInsets(innerPadding)
         .padding(16.dp)
         .verticalScroll(rememberScrollState()),
       verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1053,6 +1056,7 @@ private fun NanoDescribeContent(bottomPadding: androidx.compose.ui.unit.Dp, onBa
       modifier = Modifier
         .fillMaxSize()
         .padding(innerPadding)
+        .consumeWindowInsets(innerPadding)
         .padding(16.dp)
         .verticalScroll(rememberScrollState()),
       verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1227,7 +1231,12 @@ private fun NanoChatContent(
     bottomPadding = bottomPadding,
     onBack = onBack,
   ) { innerPadding ->
-    Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+    Column(
+      modifier = Modifier
+        .fillMaxSize()
+        .padding(innerPadding)
+        .consumeWindowInsets(innerPadding)
+    ) {
       Row(
         modifier = Modifier
           .fillMaxWidth()
@@ -1265,6 +1274,21 @@ private fun NanoChatContent(
         }
         if (streamingReply.isNotEmpty()) {
           item { NanoChatBubble(streamingReply, isUser = false) }
+        } else if (running) {
+          item {
+            Row(
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+              Text(
+                "Thinking…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+          }
         }
       }
 
@@ -1279,7 +1303,8 @@ private fun NanoChatContent(
           value = input,
           onValueChange = { input = it },
           modifier = Modifier.weight(1f),
-          placeholder = { Text("Message Gemini Nano…") },
+          shape = RoundedCornerShape(24.dp),
+          placeholder = { Text("Message") },
           maxLines = 4,
         )
         FilledIconButton(
@@ -1680,6 +1705,7 @@ private fun NanoVisionContent(
       modifier = Modifier
         .fillMaxSize()
         .padding(innerPadding)
+        .consumeWindowInsets(innerPadding)
         .padding(16.dp)
         .verticalScroll(rememberScrollState()),
       verticalArrangement = Arrangement.spacedBy(12.dp),

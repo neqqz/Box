@@ -312,7 +312,8 @@ fun StatusBarColorController(useDarkTheme: Boolean) {
     SideEffect {
       WindowCompat.setDecorFitsSystemWindows(currentWindow, false)
       val controller = WindowCompat.getInsetsController(currentWindow, view)
-      controller.isAppearanceLightStatusBars = !useDarkTheme // Set to true for light icons
+      controller.isAppearanceLightStatusBars = !useDarkTheme
+      controller.isAppearanceLightNavigationBars = !useDarkTheme
     }
   }
 }
