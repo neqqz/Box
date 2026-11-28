@@ -174,7 +174,7 @@ private val GGUF_SETTINGS = listOf(
     label = "GPU layers",
     description = "Model layers offloaded to GPU when accelerator is GPU. Lower if a model fails on GPU.",
     type = GgufSettingType.INT_DROPDOWN,
-    options = listOf("All (99)" to 99, "64" to 64, "48" to 48, "32" to 32, "24" to 24, "16" to 16, "8" to 8, "0 (CPU only)" to 0),
+    options = listOf("All" to 99, "64" to 64, "48" to 48, "32" to 32, "24" to 24, "16" to 16, "8" to 8, "0 (CPU only)" to 0),
     defaultInt = 99,
   ),
   GgufSetting(

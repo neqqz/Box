@@ -585,19 +585,13 @@ fun ChatPanel(
               ) {
                 InitializingDotsRow()
                 InitializingPixelText(
-                  text = stringResource(R.string.aichat_initializing_title),
+                  text = "Initializing",
                   style =
                     MaterialTheme.typography.headlineLarge.copy(
                       fontSize = 24.sp,
                       fontWeight = FontWeight.Bold,
                       fontFamily = PressStart2PFontFamily,
                     ),
-                )
-                Text(
-                  stringResource(R.string.aichat_initializing_content),
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                  textAlign = TextAlign.Center,
                 )
               }
             }

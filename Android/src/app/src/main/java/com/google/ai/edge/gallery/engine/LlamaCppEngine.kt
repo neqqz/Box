@@ -160,9 +160,14 @@ class LlamaCppEngine {
         CoroutineScope(Dispatchers.Default).launch {
             try {
                 prevGenJob?.cancelAndJoin()
+                lastLoadParams = params
+                lastModelPath = modelPath
+                lastSystemPrompt = systemPrompt
                 // Close and reopen — this clears the KV cache and message history
                 // but the OS keeps model pages in memory so reload is fast
-                instance.close()
+                try {
+                    instance.close()
+                } catch (_: Throwable) {}
                 instance = SmolLM()
                 if (lastNativeLibDir.isNotEmpty()) {
                     instance.loadBackends(lastNativeLibDir)
