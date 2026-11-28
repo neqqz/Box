@@ -108,6 +108,7 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
     ctx_params.no_perf = true;
     // CPU mode must stay CPU-only: otherwise the scheduler still offloads big prefill matmuls to Vulkan.
     ctx_params.op_offload = (nGpuLayers > 0);
+    _nGpuLayers = nGpuLayers;
     _ctx = llama_init_from_model(_model, ctx_params);
     if (!_ctx) {
         LOGe("llama_new_context_with_model() returned null");
@@ -324,6 +325,7 @@ LLMInference::completionLoop() {
 
     auto start = ggml_time_us();
     if (llama_decode(_ctx, *_batch) < 0) {
+        if (_nGpuLayers > 0) _gpuFailed = true;
         throw std::runtime_error("llama_decode() failed");
     }
 
@@ -385,8 +387,14 @@ LLMInference::~LLMInference() {
         free(const_cast<char *>(message.role));
         free(const_cast<char *>(message.content));
     }
-    if (_ctx) llama_free(_ctx);
-    if (_model) llama_model_free(_model);
+    // After a Vulkan device loss ggml throws from inside the (noexcept) llama_context destructor -> std::terminate.
+    // Leaking the context is the lesser evil; the app must survive to show the error.
+    if (_gpuFailed) {
+        LOGe("GPU failed earlier; skipping llama_free/model_free to avoid abort (leaking)");
+    } else {
+        if (_ctx) llama_free(_ctx);
+        if (_model) llama_model_free(_model);
+    }
     delete _batch;
     if (_sampler) llama_sampler_free(_sampler);
 }

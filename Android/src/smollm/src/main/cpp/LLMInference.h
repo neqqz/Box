@@ -36,6 +36,8 @@ private:
     std::string _cacheResponseTokens;
     const char *_chatTemplate = nullptr;
     bool _storeChats = true;
+    int _nGpuLayers = 0;
+    bool _gpuFailed = false; // decode failed on GPU: device is likely lost, freeing the context would abort()
     std::string _assistantRole = "assistant";
 
     int64_t _responseGenerationTime = 0;
