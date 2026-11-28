@@ -46,6 +46,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -416,6 +417,13 @@ fun AgentChatScreen(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
+        OutlinedButton(
+          onClick = { showMcpManagerBottomSheet = true },
+          enabled = !uiState.inProgress && !uiState.isResettingSession,
+          contentPadding = PaddingValues(horizontal = 12.dp),
+        ) {
+          Text("MCP")
+        }
         for (promptChip in TRYOUT_CHIPS) {
           FilledTonalButton(
             enabled =

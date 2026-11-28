@@ -640,17 +640,6 @@ fun MessageInputText(
                       Text(stringResource(R.string.skills))
                     }
                   }
-
-                  // MCP.
-                  if (onMcpClicked != null) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    OutlinedButton(
-                      onClick = onMcpClicked,
-                      enabled = !inProgress && !isResettingSession && !modelInitializing,
-                    ) {
-                      Text("MCP")
-                    }
-                  }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
