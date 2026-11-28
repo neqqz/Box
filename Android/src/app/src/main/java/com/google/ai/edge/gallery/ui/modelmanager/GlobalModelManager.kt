@@ -67,6 +67,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -196,6 +197,26 @@ fun GlobalModelManager(
     }
   }
 
+  // Grouping is O(models * tasks); doing it inside the LazyColumn lambda re-ran it on every recomposition (scroll lag).
+  val groupedBuiltIn by remember(uiState.tasks, builtInModels.toList()) {
+    derivedStateOf {
+      val idsByModel = HashMap<String, MutableList<String>>()
+      for (task in uiState.tasks) for (m in task.models) idsByModel.getOrPut(m.name) { mutableListOf() }.add(task.id)
+      builtInModels.groupBy { model ->
+        val taskIds = idsByModel[model.name].orEmpty()
+        when {
+          taskIds.any { it == "tts" || it == "supertonic" } -> "Text-to-Speech"
+          taskIds.any { it == "whisper" || it == "sense_voice" || it == "audio_scribe" } -> "Speech-to-Text"
+          taskIds.any {
+            it == "image_gen" || it == "upscale" || it == "restore" || it == "dewarp" || it == "sketch"
+          } -> "Image generation"
+          taskIds.any { it.startsWith("llm_") } -> "Language models"
+          else -> "Other"
+        }
+      }
+    }
+  }
+
   // Handle system's edge swipe.
   BackHandler { navigateUp() }
 
@@ -286,23 +307,8 @@ fun GlobalModelManager(
           "Image generation",
           "Other",
         )
-        val groupedBuiltIn = builtInModels.groupBy { model ->
-          val taskIds = uiState.tasks
-            .filter { task -> task.models.any { it.name == model.name } }
-            .map { it.id }
-          when {
-            taskIds.any { it == "tts" || it == "supertonic" } -> "Text-to-Speech"
-            taskIds.any { it == "whisper" || it == "sense_voice" || it == "audio_scribe" } -> "Speech-to-Text"
-            taskIds.any {
-              it == "image_gen" || it == "upscale" || it == "restore" || it == "dewarp" || it == "sketch"
-            } -> "Image generation"
-            taskIds.any { it.startsWith("llm_") } -> "Language models"
-            else -> "Other"
-          }
-        }
-
         for (category in categoryOrder) {
-          val modelsInCategory = groupedBuiltIn[category].orEmpty()
+          val modelsInCategory = groupedBuiltIn[category].orEmpty().distinctBy { it.name }
           if (modelsInCategory.isNotEmpty()) {
             item(key = "category_$category") {
               Text(
@@ -341,7 +347,7 @@ fun GlobalModelManager(
             )
           }
         }
-        items(importedModels) { model ->
+        items(importedModels.distinctBy { it.name }, key = { "imported_${it.name}" }) { model ->
           ModelItem(
             model = model,
             task = null,

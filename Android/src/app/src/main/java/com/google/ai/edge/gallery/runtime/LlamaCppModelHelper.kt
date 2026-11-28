@@ -131,6 +131,14 @@ object LlamaCppModelHelper : LlmModelHelper {
 
         val engine = LlamaCppEngine()
         engines[model.name] = engine
+        // ggml-vulkan reads these once at device init, so they only take effect on a fresh process.
+        mapOf(
+          "vk_disable_f16" to "GGML_VK_DISABLE_F16",
+          "vk_disable_fusion" to "GGML_VK_DISABLE_FUSION",
+          "vk_disable_int_dot" to "GGML_VK_DISABLE_INTEGER_DOT_PRODUCT",
+        ).forEach { (key, env) ->
+          if (prefs.getBoolean(key, false)) android.system.Os.setenv(env, "1", true)
+        }
         engine.loadBackends(context.applicationInfo.nativeLibraryDir ?: "")
 
         val availableProcessors = Runtime.getRuntime().availableProcessors()

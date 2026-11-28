@@ -181,6 +181,27 @@ private val GGUF_SETTINGS = listOf(
     defaultInt = 99,
   ),
   GgufSetting(
+    key = "vk_disable_f16",
+    label = "Vulkan: disable FP16",
+    description = "Workaround for garbage output on some Adreno/Turnip drivers. Restart the app to apply.",
+    type = GgufSettingType.SWITCH,
+    defaultBool = false,
+  ),
+  GgufSetting(
+    key = "vk_disable_fusion",
+    label = "Vulkan: disable op fusion",
+    description = "Workaround for wrong results from fused kernels. Restart the app to apply.",
+    type = GgufSettingType.SWITCH,
+    defaultBool = false,
+  ),
+  GgufSetting(
+    key = "vk_disable_int_dot",
+    label = "Vulkan: disable integer dot product",
+    description = "Forces the float matmul path for quantized weights. Restart the app to apply.",
+    type = GgufSettingType.SWITCH,
+    defaultBool = false,
+  ),
+  GgufSetting(
     key = "llama_use_mmap",
     label = "Memory-map model file (mmap)",
     description = "Off (default): read fully into RAM at load for faster first response. On: stream from storage.",
