@@ -245,12 +245,22 @@ object LlamaCppModelHelper : LlmModelHelper {
 
         val activeTools = toolsByModel[model.name].orEmpty()
         if (activeTools.isEmpty()) {
-            runWithVulkanCpuFallback(
-                model = model,
-                engine = engine,
-                input = input,
-                resultListener = resultListener,
-                onError = onError,
+            engine.generateResponse(
+                query = input,
+                onToken = { partialResponse ->
+                    resultListener(partialResponse, false, null)
+                },
+                onComplete = { _ ->
+                    // Send the final delta (empty string) with done=true
+                    resultListener("", true, null)
+                },
+                onCancelled = {
+                    resultListener("", true, null)
+                },
+                onError = { e ->
+                    Log.e(TAG, "Inference error", e)
+                    onError(e.message ?: "Inference error")
+                }
             )
             return
         }
@@ -342,68 +352,6 @@ object LlamaCppModelHelper : LlmModelHelper {
             resultListener("Reached maximum tool steps.", false, null)
             resultListener("", true, null)
         }
-    }
-
-    private fun isVulkanPipelineError(e: Exception): Boolean {
-        val msg = e.message.orEmpty()
-        return msg.contains("createComputePipeline", ignoreCase = true) ||
-            msg.contains("vk::", ignoreCase = true) ||
-            msg.contains("Vulkan", ignoreCase = true) ||
-            msg.contains("ErrorUnknown", ignoreCase = true)
-    }
-
-    private fun runWithVulkanCpuFallback(
-        model: Model,
-        engine: LlamaCppEngine,
-        input: String,
-        resultListener: ResultListener,
-        onError: (message: String) -> Unit,
-    ) {
-        engine.generateResponse(
-            query = input,
-            onToken = { partialResponse ->
-                resultListener(partialResponse, false, null)
-            },
-            onComplete = { _ ->
-                resultListener("", true, null)
-            },
-            onCancelled = {
-                resultListener("", true, null)
-            },
-            onError = { e ->
-                val gpuLayers = engine.lastLoadParams?.nGpuLayers ?: 0
-                val modelPath = engine.lastModelPath
-                if (gpuLayers > 0 && modelPath != null && isVulkanPipelineError(e)) {
-                    Log.w(TAG, "Vulkan pipeline error on GPU (nGpuLayers=$gpuLayers), falling back to CPU", e)
-                    val cpuParams = (engine.lastLoadParams ?: SmolLM.InferenceParams()).copy(nGpuLayers = 0)
-                    engine.resetConversation(
-                        modelPath = modelPath,
-                        params = cpuParams,
-                        systemPrompt = engine.lastSystemPrompt,
-                        onSuccess = {
-                            model.instance = engine
-                            engine.generateResponse(
-                                query = input,
-                                onToken = { partial -> resultListener(partial, false, null) },
-                                onComplete = { _ -> resultListener("", true, null) },
-                                onCancelled = { resultListener("", true, null) },
-                                onError = { retryErr ->
-                                    Log.e(TAG, "CPU fallback inference error", retryErr)
-                                    onError(retryErr.message ?: "Inference error")
-                                },
-                            )
-                        },
-                        onError = { resetErr ->
-                            Log.e(TAG, "CPU fallback reload error", resetErr)
-                            onError(e.message ?: "Inference error")
-                        },
-                    )
-                } else {
-                    Log.e(TAG, "Inference error", e)
-                    onError(e.message ?: "Inference error")
-                }
-            },
-        )
     }
 
     /**
