@@ -16,7 +16,9 @@
 
 package com.google.ai.edge.gallery.ui.common.chat
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.speech.tts.TextToSpeech
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -69,6 +71,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
@@ -190,6 +193,39 @@ fun ChatPanel(
   var curAmplitude by remember { mutableIntStateOf(0) }
   var pickedImagesCount by remember { mutableIntStateOf(0) }
   var pickedAudioClipsCount by remember { mutableIntStateOf(0) }
+
+  val context = androidx.compose.ui.platform.LocalContext.current
+  var ttsReady by remember { mutableStateOf(false) }
+  val tts = remember {
+    var instance: TextToSpeech? = null
+    instance = TextToSpeech(context.applicationContext) { status ->
+      ttsReady = status == TextToSpeech.SUCCESS
+    }
+    instance
+  }
+  DisposableEffect(tts) {
+    onDispose {
+      tts.stop()
+      tts.shutdown()
+    }
+  }
+  var prevInProgress by remember { mutableStateOf(false) }
+  LaunchedEffect(uiState.inProgress) {
+    val finished = prevInProgress && !uiState.inProgress
+    prevInProgress = uiState.inProgress
+    if (finished && ttsReady) {
+      val voiceReply = context
+        .getSharedPreferences("box_settings", Context.MODE_PRIVATE)
+        .getBoolean("voice_reply_enabled", false)
+      val replyText = (messages.lastOrNull() as? ChatMessageText)
+        ?.takeIf { it.side == ChatSide.AGENT }
+        ?.content
+        ?.trim()
+      if (voiceReply && !replyText.isNullOrEmpty()) {
+        tts.speak(replyText, TextToSpeech.QUEUE_FLUSH, null, "box_chat_${System.currentTimeMillis()}")
+      }
+    }
+  }
 
   var showImageLimitBanner by remember { mutableStateOf(false) }
 

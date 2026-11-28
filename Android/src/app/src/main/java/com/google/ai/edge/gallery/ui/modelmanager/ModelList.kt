@@ -159,7 +159,7 @@ fun ModelList(
 
   Box(
     contentAlignment = Alignment.BottomEnd,
-    modifier = Modifier.background(color = getTaskBgColor(task = task)),
+    modifier = Modifier.background(color = MaterialTheme.colorScheme.surface),
   ) {
     LazyColumn(
       modifier = modifier.padding(horizontal = 16.dp),
@@ -187,16 +187,7 @@ fun ModelList(
           ) {
             RevealingText(
               text = task.label,
-              style =
-                headlineLargeMedium.copy(
-                  brush = Brush.linearGradient(getTaskBgGradientColors(task = task))
-                ),
-              textAlign = TextAlign.Center,
-              animationProgress = taskIconProgress,
-            )
-            RevealingText(
-              text = task.label,
-              style = headlineLargeMedium,
+              style = headlineLargeMedium.copy(color = MaterialTheme.colorScheme.onSurface),
               textAlign = TextAlign.Center,
               animationProgress = taskLabelProgress,
             )
