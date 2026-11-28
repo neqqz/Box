@@ -201,6 +201,26 @@ constructor(@ApplicationContext private val context: Context) : ViewModel() {
     }
   }
 
+  fun setToolAlwaysAllow(serverUrl: String, toolName: String, alwaysAllow: Boolean) {
+    viewModelScope.launch(Dispatchers.IO) {
+      val updated =
+        readSavedServers().map { srv ->
+          if (srv.url == serverUrl) {
+            srv.copy(
+              tools =
+                srv.tools.map { tool ->
+                  if (tool.name == toolName) tool.copy(alwaysAllow = alwaysAllow) else tool
+                }
+            )
+          } else {
+            srv
+          }
+        }
+      writeSavedServers(updated)
+      publishServerList(updated)
+    }
+  }
+
   fun getToolsPromptSection(): String {
     if (isBlockedByAdvancedProtection()) return ""
     val enabledTools =
@@ -208,7 +228,7 @@ constructor(@ApplicationContext private val context: Context) : ViewModel() {
         .filter { it.mcpServer.enabled }
         .flatMap { srv ->
           srv.mcpServer.tools.filter { it.enabled }.map { tool ->
-            "- name: ${tool.name}\n  description: ${tool.description}\n  inputSchema: ${tool.inputSchema}"
+            "- name: ${srv.mcpServer.name}::${tool.name}\n  server: ${srv.mcpServer.name}\n  description: ${tool.description}\n  inputSchema: ${tool.inputSchema}"
           }
         }
     return enabledTools.joinToString("\n")
@@ -228,16 +248,30 @@ constructor(@ApplicationContext private val context: Context) : ViewModel() {
       if (isBlockedByAdvancedProtection()) {
         return@withContext mapOf("error" to "Blocked by Android Advanced Protection", "status" to "failed")
       }
+      val raw = toolName.trim()
+      val sepIdx = raw.indexOf("::")
+      val targetServer = if (sepIdx > 0) raw.substring(0, sepIdx).trim() else null
+      val actualToolName = if (sepIdx > 0) raw.substring(sepIdx + 2).trim() else raw
+
       val matchServer =
-        _uiState.value.mcpServers.firstOrNull { state ->
-          state.mcpServer.enabled && state.mcpServer.tools.any { it.enabled && it.name == toolName.trim() }
+        if (targetServer != null) {
+          _uiState.value.mcpServers.firstOrNull { state ->
+            state.mcpServer.enabled &&
+              (state.mcpServer.name == targetServer || state.mcpServer.url == targetServer) &&
+              state.mcpServer.tools.any { it.enabled && it.name == actualToolName }
+          }
+        } else {
+          null
         }
+          ?: _uiState.value.mcpServers.firstOrNull { state ->
+            state.mcpServer.enabled && state.mcpServer.tools.any { it.enabled && it.name == actualToolName }
+          }
           ?: return@withContext mapOf("error" to "MCP tool '$toolName' not found or disabled", "status" to "failed")
 
       return@withContext try {
         val client = ensureServerConnected(matchServer.mcpServer.url)
         val argsMap = parseJsonObjectToMap(inputJson)
-        val result = client.callTool(name = toolName.trim(), arguments = argsMap)
+        val result = client.callTool(name = actualToolName, arguments = argsMap)
         val textOutput =
           result?.content
             ?.filterIsInstance<TextContent>()

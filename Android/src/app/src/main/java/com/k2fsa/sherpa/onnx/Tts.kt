@@ -417,6 +417,7 @@ fun getOfflineTtsConfig(
             tokens = "$modelDir/tokens.txt",
             dataDir = dataDir,
             lexicon = lexiconPath,
+            lang = if (lexiconPath.isEmpty()) "en" else "",
         )
     } else {
         OfflineTtsKokoroModelConfig()

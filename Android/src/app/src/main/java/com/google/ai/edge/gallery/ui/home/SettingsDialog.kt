@@ -98,8 +98,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.fragment.app.FragmentActivity
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.ai.edge.gallery.BuildConfig
 import com.google.ai.edge.gallery.R
+import com.google.ai.edge.gallery.customtasks.mcp.McpManagerBottomSheet
+import com.google.ai.edge.gallery.customtasks.mcp.McpManagerViewModel
 import com.google.ai.edge.gallery.proto.Theme
 import com.google.ai.edge.gallery.security.BiometricEncryptionManager
 import com.google.ai.edge.gallery.security.PassphraseHolder
@@ -501,6 +504,22 @@ fun SettingsDialog(
                         .apply()
                     },
                   )
+                }
+                if (mcpEnabled.value && !offlineEnabled.value) {
+                  var showMcpManagerSheet by remember { mutableStateOf(false) }
+                  val mcpViewModel: McpManagerViewModel = hiltViewModel()
+                  androidx.compose.material3.OutlinedButton(
+                    onClick = { showMcpManagerSheet = true },
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                  ) {
+                    Text(stringResource(R.string.manage_mcp_servers))
+                  }
+                  if (showMcpManagerSheet) {
+                    McpManagerBottomSheet(
+                      mcpManagerViewModel = mcpViewModel,
+                      onDismiss = { _ -> showMcpManagerSheet = false },
+                    )
+                  }
                 }
               }
 
