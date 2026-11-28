@@ -901,6 +901,7 @@ private fun AppFontPickerSection(context: Context) {
       options = fontOptions,
       selected = currentAppFont.displayName,
       onSelect = { idx -> ThemeSettings.setAppFont(context, AppFont.entries[idx]) },
+      showLabel = false,
     )
   }
 }
@@ -930,6 +931,7 @@ private fun AreaFontPickersSection(context: Context) {
       onSelect = { idx ->
         ThemeSettings.setChatFont(context, if (idx == 0) null else AppFont.entries[idx - 1])
       },
+      showLabel = false,
     )
 
     Text(
@@ -943,6 +945,7 @@ private fun AreaFontPickersSection(context: Context) {
       onSelect = { idx ->
         ThemeSettings.setQuickActionsFont(context, if (idx == 0) null else AppFont.entries[idx - 1])
       },
+      showLabel = false,
     )
 
     Text(
@@ -956,6 +959,7 @@ private fun AreaFontPickersSection(context: Context) {
       onSelect = { idx ->
         ThemeSettings.setCategoryTabsFont(context, if (idx == 0) null else AppFont.entries[idx - 1])
       },
+      showLabel = false,
     )
 
     // Text size slider
@@ -1008,6 +1012,7 @@ private fun LanguageSwitcherSection(context: Context) {
           if (tag.isEmpty()) LocaleList.getEmptyLocaleList()
           else LocaleList.forLanguageTags(tag)
       },
+      showLabel = false,
     )
     Text(
       "Translations are still in progress — anything not yet translated stays in English.",
@@ -1350,6 +1355,7 @@ private fun DropdownPicker(
   options: List<String>,
   selected: String,
   onSelect: (Int) -> Unit,
+  showLabel: Boolean = true,
 ) {
   var expanded by remember { mutableStateOf(false) }
   ExposedDropdownMenuBox(
@@ -1361,10 +1367,11 @@ private fun DropdownPicker(
       onValueChange = {},
       readOnly = true,
       singleLine = true,
-      label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+      shape = CircleShape,
+      label = if (showLabel) ({ Text(label, style = MaterialTheme.typography.labelSmall) }) else null,
       trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
       modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
-      textStyle = MaterialTheme.typography.bodySmall,
+      textStyle = MaterialTheme.typography.bodyMedium,
     )
     ExposedDropdownMenu(
       expanded = expanded,
