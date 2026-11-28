@@ -427,6 +427,7 @@ fun SettingsDialog(
             expanded = expandNetwork,
             onToggle = { expandNetwork = !expandNetwork },
           ) {
+            val offlineEnabled = com.google.ai.edge.gallery.security.OfflineMode.isEnabled.collectAsState()
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
               // ---- Offline mode toggle ----
               Column(modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}) {
@@ -439,7 +440,6 @@ fun SettingsDialog(
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                val offlineEnabled = com.google.ai.edge.gallery.security.OfflineMode.isEnabled.collectAsState()
                 Row(
                   modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                   horizontalArrangement = Arrangement.SpaceBetween,

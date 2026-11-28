@@ -205,8 +205,8 @@ fun ChatPanel(
   }
   DisposableEffect(tts) {
     onDispose {
-      tts.stop()
-      tts.shutdown()
+      tts?.stop()
+      tts?.shutdown()
     }
   }
   var prevInProgress by remember { mutableStateOf(false) }
@@ -222,7 +222,7 @@ fun ChatPanel(
         ?.content
         ?.trim()
       if (voiceReply && !replyText.isNullOrEmpty()) {
-        tts.speak(replyText, TextToSpeech.QUEUE_FLUSH, null, "box_chat_${System.currentTimeMillis()}")
+        tts?.speak(replyText, TextToSpeech.QUEUE_FLUSH, null, "box_chat_${System.currentTimeMillis()}")
       }
     }
   }
