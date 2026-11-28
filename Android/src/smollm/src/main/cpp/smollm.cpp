@@ -14,7 +14,7 @@ Java_com_jegly_offlineLLM_smollm_SmolLM_initBackends(JNIEnv* env, jobject /*unus
     setenv("GGML_VK_DISABLE_COOPMAT", "1", 1);
     setenv("GGML_VK_DISABLE_COOPMAT2", "1", 1);
     setenv("GGML_VK_DISABLE_ASYNC", "1", 1);
-    setenv("GGML_VK_MAX_NODES_PER_SUBMIT", "64", 1);
+    setenv("GGML_VK_MAX_NODES_PER_SUBMIT", "16", 1);
     const char* dirCstr = nativeLibDir ? env->GetStringUTFChars(nativeLibDir, nullptr) : nullptr;
     if (dirCstr && dirCstr[0] != '\0') {
         ggml_backend_load_all_from_path(dirCstr);
