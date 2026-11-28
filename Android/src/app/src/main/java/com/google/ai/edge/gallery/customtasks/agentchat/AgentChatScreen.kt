@@ -209,6 +209,7 @@ fun AgentChatScreen(
       )
     },
     onSkillClicked = { showSkillManagerBottomSheet = true },
+    onMcpClicked = { showMcpManagerBottomSheet = true },
     showImagePicker = true,
     showAudioPicker = true,
     composableBelowMessageList = { model ->

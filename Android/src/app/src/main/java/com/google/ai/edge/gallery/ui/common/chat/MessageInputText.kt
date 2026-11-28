@@ -173,6 +173,7 @@ fun MessageInputText(
   onSetAudioRecorderVisible: (visible: Boolean) -> Unit = {},
   onAmplitudeChanged: (Int) -> Unit,
   onSkillsClicked: () -> Unit = {},
+  onMcpClicked: (() -> Unit)? = null,
   onPickedImagesChanged: (List<Bitmap>) -> Unit = {},
   onPickedAudioClipsChanged: (List<AudioClip>) -> Unit = {},
   showPromptTemplatesInMenu: Boolean = false,
@@ -637,6 +638,17 @@ fun MessageInputText(
                       enabled = !inProgress && !isResettingSession && !modelInitializing,
                     ) {
                       Text(stringResource(R.string.skills))
+                    }
+                  }
+
+                  // MCP.
+                  if (onMcpClicked != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    OutlinedButton(
+                      onClick = onMcpClicked,
+                      enabled = !inProgress && !isResettingSession && !modelInitializing,
+                    ) {
+                      Text("MCP")
                     }
                   }
                 }
