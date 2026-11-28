@@ -7,29 +7,36 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoFixHigh
+import androidx.compose.material.icons.outlined.ContentCut
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -37,6 +44,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -97,7 +107,7 @@ class BgRemoverEngine(private val appContext: Context) {
     return CvUtils.loadCompiledModel(staged.absolutePath).also { compiledModel = it }
   }
 
-  suspend fun removeBackground(source: Bitmap): Bitmap? = withContext(Dispatchers.Default) {
+  suspend fun removeBackground(source: Bitmap, trimEdges: Boolean = false): Bitmap? = withContext(Dispatchers.Default) {
     val model = runCatching { getOrLoadModel() }.getOrNull() ?: return@withContext null
     val inputBmp = Bitmap.createScaledBitmap(source, 320, 320, true)
     val n = 320 * 320
@@ -163,7 +173,32 @@ class BgRemoverEngine(private val appContext: Context) {
       val alpha = (mArr[idx] ushr 24) and 0xFF
       (alpha shl 24) or (srcArr[idx] and 0x00FFFFFF)
     }
-    Bitmap.createBitmap(outArr, w, h, Bitmap.Config.ARGB_8888)
+    val result = Bitmap.createBitmap(outArr, w, h, Bitmap.Config.ARGB_8888)
+    if (trimEdges) trimTransparentEdges(result) else result
+  }
+
+  private fun trimTransparentEdges(bmp: Bitmap): Bitmap {
+    val w = bmp.width
+    val h = bmp.height
+    val px = IntArray(w * h)
+    bmp.getPixels(px, 0, w, 0, 0, w, h)
+    var minX = w
+    var minY = h
+    var maxX = -1
+    var maxY = -1
+    for (y in 0 until h) {
+      val row = y * w
+      for (x in 0 until w) {
+        if (((px[row + x] ushr 24) and 0xFF) > 8) {
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+        }
+      }
+    }
+    if (maxX < minX || maxY < minY) return bmp
+    return Bitmap.createBitmap(bmp, minX, minY, maxX - minX + 1, maxY - minY + 1)
   }
 
   fun close() {
@@ -176,6 +211,7 @@ data class BgRemovalUiState(
   val sourceBitmap: Bitmap? = null,
   val resultBitmap: Bitmap? = null,
   val isProcessing: Boolean = false,
+  val trimEdges: Boolean = false,
   val saved: Boolean = false,
   val errorMessage: String? = null,
 )
@@ -187,15 +223,25 @@ class BgRemovalViewModel @Inject constructor() : ViewModel() {
 
   private var engine: BgRemoverEngine? = null
 
-  fun processUri(context: Context, uri: Uri) {
+  fun selectUri(context: Context, uri: Uri) {
     val src = CvUtils.decodeScaledBitmap(context, uri, maxDim = 2048) ?: run {
       _uiState.update { it.copy(errorMessage = "Could not load image") }
       return
     }
-    _uiState.update { it.copy(sourceBitmap = src, resultBitmap = null, isProcessing = true, saved = false, errorMessage = null) }
+    _uiState.update { it.copy(sourceBitmap = src, resultBitmap = null, isProcessing = false, saved = false, errorMessage = null) }
+  }
+
+  fun setTrimEdges(enabled: Boolean) {
+    _uiState.update { it.copy(trimEdges = enabled) }
+  }
+
+  fun removeBackground(context: Context) {
+    val src = _uiState.value.sourceBitmap ?: return
+    val trim = _uiState.value.trimEdges
+    _uiState.update { it.copy(isProcessing = true, saved = false, errorMessage = null) }
     viewModelScope.launch {
       val e = engine ?: BgRemoverEngine(context.applicationContext).also { engine = it }
-      val out = e.removeBackground(src)
+      val out = e.removeBackground(src, trimEdges = trim)
       _uiState.update {
         it.copy(
           isProcessing = false,
@@ -204,6 +250,10 @@ class BgRemovalViewModel @Inject constructor() : ViewModel() {
         )
       }
     }
+  }
+
+  fun reset() {
+    _uiState.update { it.copy(resultBitmap = null, saved = false, errorMessage = null) }
   }
 
   fun save(context: Context) {
@@ -250,12 +300,32 @@ internal object BgRemovalTaskModule {
 }
 
 @Composable
+private fun CheckerboardBackground(modifier: Modifier = Modifier) {
+  val light = MaterialTheme.colorScheme.surfaceContainerLowest
+  val dark = MaterialTheme.colorScheme.surfaceContainerHigh
+  Canvas(modifier = modifier) {
+    val cellSize = 12.dp.toPx()
+    val cols = (size.width / cellSize).toInt() + 1
+    val rows = (size.height / cellSize).toInt() + 1
+    for (r in 0 until rows) {
+      for (c in 0 until cols) {
+        drawRect(
+          color = if ((r + c) % 2 == 0) light else dark,
+          topLeft = Offset(c * cellSize, r * cellSize),
+          size = Size(cellSize, cellSize),
+        )
+      }
+    }
+  }
+}
+
+@Composable
 fun BgRemovalScreen(viewModel: BgRemovalViewModel = hiltViewModel()) {
   val state by viewModel.uiState.collectAsState()
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
   val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-    if (uri != null) viewModel.processUri(context, uri)
+    if (uri != null) viewModel.selectUri(context, uri)
   }
 
   Column(
@@ -263,45 +333,125 @@ fun BgRemovalScreen(viewModel: BgRemovalViewModel = hiltViewModel()) {
     verticalArrangement = Arrangement.spacedBy(12.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
-    Button(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
-      Icon(Icons.Outlined.PhotoLibrary, contentDescription = null)
-      Spacer(Modifier.width(8.dp))
-      Text("Pick image")
-    }
+    if (state.sourceBitmap == null) {
+      OutlinedButton(
+        onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        modifier = Modifier.fillMaxWidth().height(240.dp),
+        shape = RoundedCornerShape(12.dp),
+      ) {
+        Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Pick image")
+      }
+    } else {
+      val shown = state.resultBitmap ?: state.sourceBitmap!!
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+      ) {
+        Column(
+          modifier = Modifier.padding(12.dp),
+          verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+          Box(
+            modifier =
+              Modifier.fillMaxWidth()
+                .aspectRatio(shown.width.toFloat() / shown.height.toFloat().coerceAtLeast(1f))
+                .clip(RoundedCornerShape(8.dp)),
+          ) {
+            if (state.resultBitmap != null) {
+              CheckerboardBackground(modifier = Modifier.matchParentSize())
+            }
+            Image(
+              bitmap = shown.asImageBitmap(),
+              contentDescription = if (state.resultBitmap != null) "Result" else "Source",
+              contentScale = ContentScale.Fit,
+              modifier = Modifier.matchParentSize(),
+            )
+          }
 
-    if (state.isProcessing) {
-      Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) {
-        CircularProgressIndicator()
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            OutlinedButton(
+              onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+              enabled = !state.isProcessing,
+            ) {
+              Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
+              Spacer(Modifier.width(6.dp))
+              Text("Pick another")
+            }
+            if (state.resultBitmap != null) {
+              OutlinedButton(onClick = { viewModel.save(context) }) {
+                Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (state.saved) "Saved" else "Save")
+              }
+              OutlinedButton(
+                onClick = { scope.launch { CvUtils.shareBitmap(context, state.resultBitmap!!, "bgremoval_share") } },
+              ) {
+                Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Share")
+              }
+            }
+          }
+        }
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Icon(
+          Icons.Outlined.ContentCut,
+          contentDescription = null,
+          modifier = Modifier.size(18.dp),
+          tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+          "Trim transparent edges",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.weight(1f),
+        )
+        Switch(
+          checked = state.trimEdges,
+          onCheckedChange = { viewModel.setTrimEdges(it) },
+          enabled = !state.isProcessing,
+        )
+      }
+
+      Button(
+        onClick = { viewModel.removeBackground(context) },
+        enabled = !state.isProcessing,
+        modifier = Modifier.fillMaxWidth(),
+      ) {
+        if (state.isProcessing) {
+          CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+          Spacer(Modifier.width(8.dp))
+          Text("Removing…")
+        } else {
+          Icon(Icons.Outlined.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(Modifier.width(8.dp))
+          Text("Remove background")
+        }
+      }
+
+      if (state.resultBitmap != null) {
+        OutlinedButton(
+          onClick = { viewModel.reset() },
+          modifier = Modifier.fillMaxWidth(),
+        ) {
+          Text("Reset")
+        }
       }
     }
 
     state.errorMessage?.let {
       Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-    }
-
-    val shown = state.resultBitmap ?: state.sourceBitmap
-    if (shown != null && !state.isProcessing) {
-      Image(
-        bitmap = shown.asImageBitmap(),
-        contentDescription = null,
-        contentScale = ContentScale.Fit,
-        modifier = Modifier.fillMaxWidth().height(360.dp),
-      )
-    }
-
-    if (state.resultBitmap != null) {
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(onClick = { viewModel.save(context) }) {
-          Icon(Icons.Outlined.Download, contentDescription = null)
-          Spacer(Modifier.width(6.dp))
-          Text(if (state.saved) "Saved" else "Save PNG")
-        }
-        OutlinedButton(onClick = { scope.launch { CvUtils.shareBitmap(context, state.resultBitmap!!, "bgremoved") } }) {
-          Icon(Icons.Outlined.Share, contentDescription = null)
-          Spacer(Modifier.width(6.dp))
-          Text("Share")
-        }
-      }
     }
   }
 }

@@ -46,17 +46,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.TextAutoSize
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ListAlt
 import androidx.compose.material.icons.rounded.Error
@@ -400,51 +398,19 @@ fun HomeScreen(
             contentAlignment = Alignment.TopCenter,
             modifier = Modifier.fillMaxSize().background(homeBgBrush),
           ) {
-            // Inner box to hold content.
-            Box(
-              contentAlignment = Alignment.TopCenter,
+            var selectedCategoryIndex by remember { mutableIntStateOf(0) }
+            val pagerState = rememberPagerState(pageCount = { sortedCategories.size })
+            LaunchedEffect(pagerState.settledPage) {
+              selectedCategoryIndex = pagerState.settledPage
+            }
+
+            LazyColumn(
               modifier =
                 Modifier.fillMaxSize()
-                  .background(homeBgBrush)
-                  .padding(top = innerPadding.calculateTopPadding())
-                  .verticalScroll(rememberScrollState()),
+                  .padding(top = innerPadding.calculateTopPadding()),
+              contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 10.dp),
             ) {
-              // Background star at top - disabled
-              if (false) {
-                val progress =
-                  if (!enableAnimation) {
-                    1f
-                  } else {
-                    rememberDelayedAnimationProgress(
-                      initialDelay = ANIMATION_INIT_DELAY,
-                      animationDurationMs = 2000,
-                      animationLabel = "bg star",
-                    )
-                  }
-                val configuration = LocalConfiguration.current
-                val screenWidth = configuration.screenWidthDp.dp
-                val targetWidth = screenWidth * 1.5f
-                Image(
-                  painter = painterResource(id = R.drawable.bg_star),
-                  contentDescription = null,
-                  modifier =
-                    Modifier.requiredWidth(targetWidth)
-                      .blur(radius = 35.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded)
-                      .offset(x = screenWidth * 0.25f, y = -screenWidth * 0.1f)
-                      .graphicsLayer {
-                        rotationZ = (1f - progress) * 40f
-                        scaleX = 0.4f + 0.6f * progress
-                        scaleY = 0.4f + 0.6f * progress
-                        alpha = progress * 2f
-                      },
-                  contentScale = ContentScale.Crop,
-                  colorFilter = ColorFilter.tint(MaterialTheme.customColors.bgStarColor),
-                )
-              }
-
-              Column(modifier = Modifier.fillMaxWidth()) {
-                var selectedCategoryIndex by remember { mutableIntStateOf(0) }
-
+              item(key = "intro_and_actions") {
                 // App intro text (Title removed as per request).
                 Column(
                   modifier =
@@ -523,14 +489,6 @@ fun HomeScreen(
                   }
                 }
 
-                // Tab header for categories.
-                //
-                // synchronizes the `pagerState` and the `selectedCategoryIndex` to ensure that
-                //  both the tab header and the task list always show the correct category and page.
-                val pagerState = rememberPagerState(pageCount = { sortedCategories.size })
-                LaunchedEffect(pagerState.settledPage) {
-                  selectedCategoryIndex = pagerState.settledPage
-                }
                 if (sortedCategories.size > 1) {
                   CategoryTabHeader(
                     sortedCategories = sortedCategories,
@@ -542,9 +500,9 @@ fun HomeScreen(
                     },
                   )
                 }
+              }
 
-                // Task list in a horizontal pager. Each page shows the list of tasks for the
-                // category.
+              item(key = "task_list") {
                 val grid = gm4
                 TaskList(
                   modelManagerViewModel = modelManagerViewModel,
@@ -556,8 +514,6 @@ fun HomeScreen(
                   gm4 = gm4,
                   grid = grid,
                 )
-
-                Spacer(modifier = Modifier.height(innerPadding.calculateBottomPadding() + 10.dp))
               }
             }
 
@@ -1013,8 +969,7 @@ private fun TaskCard(
             modifier = Modifier.clearAndSetSemantics {},
             minLines = 2,
             maxLines = 2,
-            autoSize =
-              TextAutoSize.StepBased(minFontSize = 8.sp, maxFontSize = 12.sp, stepSize = 1.sp),
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
           )
         }
       }
@@ -1025,11 +980,8 @@ private fun TaskCard(
         horizontalArrangement = Arrangement.SpaceBetween,
       ) {
         if (description.isNotEmpty()) {
-          // Icon.
-          TaskIcon(task = task, width = 40.dp)
-
           // Title and description.
-          Column(modifier = Modifier.weight(1f).padding(start = 16.dp)) {
+          Column(modifier = Modifier.weight(1f)) {
             Row(
               modifier = Modifier.fillMaxWidth(),
               verticalAlignment = Alignment.CenterVertically,
@@ -1075,9 +1027,6 @@ private fun TaskCard(
               modifier = Modifier.clearAndSetSemantics {},
             )
           }
-
-          // Icon.
-          TaskIcon(task = task, width = 40.dp)
         }
       }
     }
