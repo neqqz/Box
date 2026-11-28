@@ -96,8 +96,8 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
         ? std::min<uint32_t>(ctx_params.n_ctx, 256)
         : std::min<uint32_t>(ctx_params.n_ctx, 2048);
     ctx_params.n_ubatch = (nGpuLayers > 0) ? 32 : 512;
-    // Disable Vulkan FlashAttention on GPU to avoid Adreno vk::Device::createComputePipeline: ErrorUnknown.
-    ctx_params.flash_attn_type = (nGpuLayers > 0) ? LLAMA_FLASH_ATTN_TYPE_DISABLED : LLAMA_FLASH_ATTN_TYPE_ENABLED;
+    // Test FlashAttention on GPU (with coopmat disabled) and split submits via GGML_VK_MAX_NODES_PER_SUBMIT.
+    ctx_params.flash_attn_type = (nGpuLayers > 0) ? LLAMA_FLASH_ATTN_TYPE_AUTO : LLAMA_FLASH_ATTN_TYPE_ENABLED;
     ctx_params.n_threads = nThreads;
     ctx_params.n_threads_batch = (nThreadsBatch > 0) ? nThreadsBatch : nThreads;
     // Q8 KV on Vulkan/Adreno hits CPU fallbacks (SIGSEGV in mul_mat), keep F16 when offloading.
