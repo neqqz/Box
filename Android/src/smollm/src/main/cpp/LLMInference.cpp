@@ -91,11 +91,11 @@ LLMInference::loadModel(const char *model_path, float minP, float temperature, f
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = contextSize;
-    // Cap GPU batch/ubatch to prevent kgsl-3d0 gpu timeout / vk::DeviceLostError on Adreno.
+    // Cap GPU batch/ubatch to prevent kgsl-3d0 gpu timeout / vk::DeviceLostError on Adreno Gen 7.
     ctx_params.n_batch = (nGpuLayers > 0)
-        ? std::min<uint32_t>(ctx_params.n_ctx, 512)
+        ? std::min<uint32_t>(ctx_params.n_ctx, 256)
         : std::min<uint32_t>(ctx_params.n_ctx, 2048);
-    ctx_params.n_ubatch = (nGpuLayers > 0) ? 128 : 512;
+    ctx_params.n_ubatch = (nGpuLayers > 0) ? 32 : 512;
     // Disable Vulkan FlashAttention on GPU to avoid Adreno vk::Device::createComputePipeline: ErrorUnknown.
     ctx_params.flash_attn_type = (nGpuLayers > 0) ? LLAMA_FLASH_ATTN_TYPE_DISABLED : LLAMA_FLASH_ATTN_TYPE_ENABLED;
     ctx_params.n_threads = nThreads;
