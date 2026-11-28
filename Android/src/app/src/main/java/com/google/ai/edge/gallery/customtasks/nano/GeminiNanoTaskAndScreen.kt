@@ -72,6 +72,7 @@ import androidx.compose.material.icons.outlined.Spellcheck
 import androidx.compose.material.icons.outlined.Summarize
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CameraAlt
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
@@ -284,6 +285,24 @@ class NanoChatViewModel @Inject constructor(
         val updated = conv.copy(title = text.take(48), updatedAt = System.currentTimeMillis())
         chatRepository.updateConversation(updated)
         _activeConversation.value = updated
+      }
+    }
+  }
+
+  fun deleteConversation(conv: Conversation) {
+    viewModelScope.launch {
+      val wasActive = _activeConversation.value?.id == conv.id
+      chatRepository.deleteConversation(conv)
+      if (wasActive) {
+        val next = _conversations.value.firstOrNull { it.id != conv.id }
+        _activeConversation.value = next
+        messages.clear()
+        if (next != null) {
+          val loaded = chatRepository.getMessagesSync(next.id)
+          loaded.forEach { msg ->
+            messages.add(NanoChatTurn(text = msg.content, isUser = msg.role == "user"))
+          }
+        }
       }
     }
   }
@@ -1256,6 +1275,13 @@ private fun NanoChatContent(
             selected = conv.id == activeConv?.id,
             onClick = { viewModel.selectConversation(conv) },
             label = { Text(conv.title.take(18)) },
+            trailingIcon = {
+              Icon(
+                Icons.Rounded.Close,
+                contentDescription = "Delete",
+                modifier = Modifier.size(16.dp).clickable { viewModel.deleteConversation(conv) },
+              )
+            },
           )
         }
       }
