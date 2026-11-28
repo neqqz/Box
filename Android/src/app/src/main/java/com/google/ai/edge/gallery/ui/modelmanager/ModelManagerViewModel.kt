@@ -1275,11 +1275,12 @@ constructor(
           }
         }
         .toMutableList()
-    // llama.cpp has no NPU path and Vulkan on Adreno loses the device (SIGABRT), so GGUF defaults to CPU.
+    // Vulkan on Adreno loses the device (SIGABRT), so GGUF defaults to CPU. NPU is kept in the list
+    // because users rely on it; llama.cpp has no NPU path, so it runs on CPU (nGpuLayers = 0).
     if (info.fileName.endsWith(".gguf", ignoreCase = true)) {
-      accelerators.remove(Accelerator.NPU)
       accelerators.remove(Accelerator.CPU)
       accelerators.add(0, Accelerator.CPU)
+      if (!accelerators.contains(Accelerator.NPU)) accelerators.add(Accelerator.NPU)
     }
     val llmMaxToken = info.llmConfig.defaultMaxTokens
     val llmSupportImage = info.llmConfig.supportImage
