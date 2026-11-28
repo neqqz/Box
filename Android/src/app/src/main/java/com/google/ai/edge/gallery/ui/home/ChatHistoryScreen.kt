@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Icon
@@ -76,7 +77,8 @@ fun ChatHistoryScreen(
     viewModel: ChatHistoryViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
-    val conversations by viewModel.conversations.collectAsState()
+    val conversationsState by viewModel.conversations.collectAsState()
+    val conversations = conversationsState.orEmpty()
     val selectedMessages by viewModel.selectedMessages.collectAsState()
     var showDeleteAllDialog by remember { mutableStateOf(false) }
     var selectedConversation by remember { mutableStateOf<Conversation?>(null) }
@@ -131,7 +133,16 @@ fun ChatHistoryScreen(
             )
         },
     ) { innerPadding ->
-        if (conversations.isEmpty()) {
+        if (conversationsState == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        } else if (conversations.isEmpty()) {
             // Empty state
             Box(
                 modifier = Modifier

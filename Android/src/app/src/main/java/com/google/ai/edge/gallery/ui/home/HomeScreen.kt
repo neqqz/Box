@@ -457,6 +457,7 @@ fun HomeScreen(
                   FilledTonalButton(
                     onClick = navigateToChatHistory,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                   ) {
                     Icon(
                       Icons.Rounded.Forum,

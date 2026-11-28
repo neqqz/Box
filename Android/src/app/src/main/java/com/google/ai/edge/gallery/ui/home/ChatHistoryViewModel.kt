@@ -34,9 +34,9 @@ class ChatHistoryViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
 ) : ViewModel() {
 
-    val conversations: StateFlow<List<Conversation>> = chatRepository
+    val conversations: StateFlow<List<Conversation>?> = chatRepository
         .getAllConversations()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val _selectedMessages = MutableStateFlow<List<Message>>(emptyList())
     val selectedMessages: StateFlow<List<Message>> = _selectedMessages.asStateFlow()
